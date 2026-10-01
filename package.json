@@ -1,0 +1,37 @@
+{
+	"name": "zerotracks",
+	"type": "module",
+	"version": "1.0.0",
+	"private": true,
+	"license": "AGPL-3.0-or-later",
+	"scripts": {
+		"dev": "concurrently -k -n search,web -c cyan,green \"npm:search:dev\" \"vite\"",
+		"search": "node server/index.mjs",
+		"search:dev": "node --watch server/index.mjs",
+		"index": "tsx scripts/build-index.ts",
+		"build": "npm run index && vite build",
+		"build:live-preview": "cross-env VITE_SEARCH_API_URL=/api npm run build",
+		"preview": "concurrently -k -n search,preview -c cyan,green \"npm:search\" \"vite preview\"",
+		"test": "vitest run",
+		"lint": "biome check src scripts tests vite.config.ts"
+	},
+	"dependencies": {
+		"cheerio": "^1.2.0",
+		"lucide-react": "^0.468.0",
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.0",
+		"@types/node": "^22.10.2",
+		"@types/react": "^19.0.0",
+		"@types/react-dom": "^19.0.0",
+		"@vitejs/plugin-react": "^5.0.0",
+		"concurrently": "^10.0.5",
+		"cross-env": "^10.1.0",
+		"tsx": "^4.19.0",
+		"typescript": "~5.7.2",
+		"vite": "^6.0.0",
+		"vitest": "^5.0.2"
+	}
+}

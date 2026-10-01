@@ -1,0 +1,134 @@
+[
+  {
+    "id": "data-gov",
+    "title": "Data.gov catalog",
+    "url": "https://data.gov/",
+    "description": "The U.S. government's open data catalog, with datasets published by federal agencies.",
+    "content": "Explore public datasets by topic, agency, and location. Catalog records point to source agencies and describe formats, update schedules, and access conditions.",
+    "category": "Open data",
+    "published": "2025-02-10",
+    "source": "U.S. General Services Administration",
+    "entities": ["open data", "federal agencies", "datasets"]
+  },
+  {
+    "id": "loc-collections",
+    "title": "Library of Congress digital collections",
+    "url": "https://www.loc.gov/collections/",
+    "description": "Search digitized photographs, maps, manuscripts, newspapers, sound recordings, and other collection materials.",
+    "content": "Collection pages provide descriptions and access to digitized primary sources. Item records may include dates, creators, subjects, formats, and rights information.",
+    "category": "Archives",
+    "published": "2024-11-14",
+    "source": "Library of Congress",
+    "entities": ["digital collections", "primary sources", "archives"]
+  },
+  {
+    "id": "archives-catalog",
+    "title": "National Archives Catalog",
+    "url": "https://catalog.archives.gov/",
+    "description": "Search descriptions of records held by the U.S. National Archives and participating institutions.",
+    "content": "Catalog entries describe records, archival creators, series, and digitized objects. Search result metadata can help trace provenance and identify records for further review.",
+    "category": "Archives",
+    "published": "2025-01-22",
+    "source": "U.S. National Archives and Records Administration",
+    "entities": ["archives", "records", "provenance"]
+  },
+  {
+    "id": "ncei-climate-data",
+    "title": "Climate Data Online",
+    "url": "https://www.ncei.noaa.gov/cdo-web/",
+    "description": "Discover historical weather and climate data products from NOAA's National Centers for Environmental Information.",
+    "content": "The catalog covers station observations and other climate records. Dataset descriptions and station metadata are important when comparing locations, time spans, and measurement methods.",
+    "category": "Climate",
+    "published": "2025-03-05",
+    "source": "National Centers for Environmental Information",
+    "entities": ["NOAA", "climate data", "weather stations"]
+  },
+  {
+    "id": "earth-observatory",
+    "title": "NASA Earth Observatory",
+    "url": "https://earthobservatory.nasa.gov/",
+    "description": "Earth science stories and imagery about the planet's land, oceans, atmosphere, and changing climate.",
+    "content": "Articles explain observations from satellite instruments and other sources, with context about dates, locations, and environmental processes. Images and captions link observations to source missions.",
+    "category": "Climate",
+    "published": "2025-04-18",
+    "source": "NASA Earth Observatory",
+    "entities": ["NASA", "satellite imagery", "climate data"]
+  },
+  {
+    "id": "usgs-earthquakes",
+    "title": "USGS Earthquake Hazards Program",
+    "url": "https://earthquake.usgs.gov/",
+    "description": "Earthquake information, hazard resources, maps, and data from the U.S. Geological Survey.",
+    "content": "The program publishes earthquake event information and explanatory material about hazards and seismic monitoring. Event records can include time, magnitude, location, and review status.",
+    "category": "Earth science",
+    "published": "2025-05-09",
+    "source": "U.S. Geological Survey",
+    "entities": ["USGS", "earthquake data", "hazard maps"]
+  },
+  {
+    "id": "nist-csf",
+    "title": "NIST Cybersecurity Framework",
+    "url": "https://www.nist.gov/cyberframework",
+    "description": "Guidance for organizations to understand, assess, prioritize, and communicate cybersecurity risk.",
+    "content": "The framework organizes cybersecurity outcomes and references. It is intended to support risk management across organizations rather than prescribe a single technical implementation.",
+    "category": "Security",
+    "published": "2024-02-26",
+    "source": "National Institute of Standards and Technology",
+    "entities": ["NIST", "cybersecurity", "risk management"]
+  },
+  {
+    "id": "cisa-kev",
+    "title": "Known Exploited Vulnerabilities Catalog",
+    "url": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
+    "description": "CISA's catalog of vulnerabilities known to have been exploited in the wild.",
+    "content": "Catalog records include vulnerability identifiers, product and vendor details, action guidance, and due dates for federal agencies under binding operational directives. The entries are useful for prioritization, not a complete vulnerability inventory.",
+    "category": "Security",
+    "published": "2025-06-16",
+    "source": "Cybersecurity and Infrastructure Security Agency",
+    "entities": ["CISA", "vulnerability catalog", "cybersecurity"]
+  },
+  {
+    "id": "sec-edgar",
+    "title": "SEC EDGAR company filings",
+    "url": "https://www.sec.gov/edgar/search/",
+    "description": "Search filings submitted to the U.S. Securities and Exchange Commission by public companies and other filers.",
+    "content": "EDGAR filing records identify issuers, filing types, and submission dates. Company filings are primary disclosures and should be read in their filing context, including amendments and exhibits.",
+    "category": "Corporate records",
+    "published": "2025-07-03",
+    "source": "U.S. Securities and Exchange Commission",
+    "entities": ["SEC", "company filings", "public companies"]
+  },
+  {
+    "id": "pubmed",
+    "title": "PubMed biomedical literature search",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/",
+    "description": "Search citations and abstracts for biomedical and life sciences literature.",
+    "content": "PubMed records include bibliographic details and links to available full text. Indexing and publication metadata help narrow a literature search but do not replace assessment of study design or evidence quality.",
+    "category": "Research",
+    "published": "2025-08-20",
+    "source": "National Library of Medicine",
+    "entities": ["biomedical research", "literature search", "National Library of Medicine"]
+  },
+  {
+    "id": "epa-envirofacts",
+    "title": "EPA Envirofacts data access",
+    "url": "https://www.epa.gov/enviro/envirofacts-data-service-api",
+    "description": "EPA tools for exploring environmental information and datasets from agency programs.",
+    "content": "Environmental records may describe facilities, regulated activities, and measurements. Interpret records with the associated program definitions, geographic coverage, and reporting dates.",
+    "category": "Environment",
+    "published": "2024-09-30",
+    "source": "U.S. Environmental Protection Agency",
+    "entities": ["EPA", "environmental data", "facilities"]
+  },
+  {
+    "id": "nasa-earthdata",
+    "title": "NASA Earthdata search",
+    "url": "https://www.earthdata.nasa.gov/",
+    "description": "Find Earth science data products and information from NASA's Earth-observing missions.",
+    "content": "Earthdata resources describe data products, mission instruments, and access pathways. Product metadata can help compare spatial coverage, temporal resolution, and processing levels across observations.",
+    "category": "Climate",
+    "published": "2025-09-12",
+    "source": "NASA Earth Science Data Systems",
+    "entities": ["NASA", "satellite imagery", "Earth science data"]
+  }
+]

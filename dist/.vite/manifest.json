@@ -1,0 +1,23 @@
+{
+  "index.html": {
+    "file": "assets/index-CJEB0XjJ.js",
+    "name": "index",
+    "src": "index.html",
+    "isEntry": true,
+    "dynamicImports": [
+      "src/components/ConnectedField.tsx"
+    ],
+    "css": [
+      "assets/index-FtPj8Ixl.css"
+    ]
+  },
+  "src/components/ConnectedField.tsx": {
+    "file": "assets/ConnectedField-DOS9llUu.js",
+    "name": "ConnectedField",
+    "src": "src/components/ConnectedField.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html"
+    ]
+  }
+}
