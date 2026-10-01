@@ -9,6 +9,7 @@ const searchProxy = {
 };
 
 export default defineConfig(({ command }) => {
+	base: '/zerotracks/',
 	const plugins = [...react()];
 	if (command === "serve") {
 		plugins.push({
@@ -28,11 +29,4 @@ export default defineConfig(({ command }) => {
 		preview: { proxy: searchProxy },
 		build: { manifest: true, chunkSizeWarningLimit: 600 },
 	};
-})
-import { defineConfig } from 'vite'
-import react from '@vitejs/vite-plugin-react' // (if using React)
-
-export default defineConfig({
-  base: '/zerotracks/', // <--- ADD THIS LINE ONLY
-  plugins: [react()],
 });
