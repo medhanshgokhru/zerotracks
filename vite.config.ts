@@ -28,8 +28,11 @@ export default defineConfig(({ command }) => {
 		preview: { proxy: searchProxy },
 		build: { manifest: true, chunkSizeWarningLimit: 600 },
 	};
-});
-export default defineConfig({
-  base: '/zerotracks/', // Add this line exactly
-  plugins: [react()],
 })
+import { defineConfig } from 'vite'
+import react from '@vitejs/vite-plugin-react' // (if using React)
+
+export default defineConfig({
+  base: '/zerotracks/', // <--- ADD THIS LINE ONLY
+  plugins: [react()],
+});
