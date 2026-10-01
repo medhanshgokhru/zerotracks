@@ -24,7 +24,6 @@ export default defineConfig(({ command }) => {
   }
 
   return {
-    base: "/zerotracks/",
     plugins,
     server: { proxy: searchProxy },
     preview: { proxy: searchProxy },
