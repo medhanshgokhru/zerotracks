@@ -29,3 +29,7 @@ export default defineConfig(({ command }) => {
 		build: { manifest: true, chunkSizeWarningLimit: 600 },
 	};
 });
+export default defineConfig({
+  base: '/zerotracks/', // Add this line exactly
+  plugins: [react()],
+})
