@@ -18,6 +18,7 @@ import {
 	rankLiveResults,
 	rankRelatedDocuments,
 	searchWikipedia,
+	sourceReliabilitySignal,
 } from "./search/live";
 import { cleanDisplayText } from "./search/tokenizer";
 import type {
@@ -79,6 +80,20 @@ function CompactResult({
 			onClick={onClick}
 			aria-pressed={selected}
 		>
+			<span className="orbit-thumb" aria-hidden="true">
+				{document.image ? (
+					<img
+						src={document.image}
+						alt=""
+						referrerPolicy="no-referrer"
+						onError={(event) => {
+							event.currentTarget.style.display = "none";
+						}}
+					/>
+				) : (
+					documentDomain(document).slice(0, 1).toUpperCase()
+				)}
+			</span>
 			<span className="orbit-position">
 				{String(position).padStart(2, "0")}
 			</span>
@@ -303,16 +318,64 @@ export default function App() {
 		() => buildAiSummary(records, submittedQuery, 3),
 		[records, submittedQuery],
 	);
+	const mediaSources = useMemo(
+		() =>
+			records
+				.filter(
+					(document) =>
+						Boolean(document.image) && !document.image?.includes("/ip3/"),
+				)
+				.slice(0, 6),
+		[records],
+	);
 	const overviewSources = useMemo(() => {
 		const sourceIds = new Set(overview.payload?.sourceIds ?? []);
-		return (
-			livePayload?.results.flatMap((hit, index) => {
-				if (!sourceIds.has(hit.id)) return [];
-				const document = records[index];
-				return document ? [document] : [];
-			}) ?? []
-		);
-	}, [livePayload, overview.payload?.sourceIds, records]);
+		const evidence =
+			sourceIds.size > 0
+				? records.filter((document) => sourceIds.has(document.id))
+				: records
+						.filter((document) => {
+							const domain = documentDomain(document).toLowerCase();
+							const title = cleanDisplayText(document.title).toLowerCase();
+							return (
+								domain !== "www.instagram.com" &&
+								domain !== "instagram.com" &&
+								domain !== "x.com" &&
+								domain !== "www.x.com" &&
+								!domain.includes("youtube.com") &&
+								!title.includes("age") &&
+								!title.includes("girlfriend") &&
+								!title.includes("family") &&
+								!title.includes("net worth") &&
+								!title.includes("dating")
+							);
+						})
+						.map((document) => ({
+							document,
+							reliability: sourceReliabilitySignal(documentDomain(document)),
+						}))
+						.sort((left, right) => right.reliability - left.reliability)
+						.slice(0, 3)
+						.map(({ document }) => document);
+		return evidence
+			.filter((document) => {
+				const domain = documentDomain(document).toLowerCase();
+				const title = cleanDisplayText(document.title).toLowerCase();
+				return (
+					domain !== "www.instagram.com" &&
+					domain !== "instagram.com" &&
+					domain !== "x.com" &&
+					domain !== "www.x.com" &&
+					!domain.includes("youtube.com") &&
+					!title.includes("age") &&
+					!title.includes("girlfriend") &&
+					!title.includes("family") &&
+					!title.includes("net worth") &&
+					!title.includes("dating")
+				);
+			})
+			.slice(0, 3);
+	}, [overview.payload?.sourceIds, records]);
 	const domains = useMemo(
 		() => [...new Set(records.map(documentDomain))].sort(),
 		[records],
@@ -600,36 +663,117 @@ export default function App() {
 								<div className="ai-summary-head">
 									<span className="ai-summary-mark">✦</span>
 									<div>
-										<span className="related-label">
-											AI OVERVIEW ·{" "}
-											{overview.payload?.model
-												? `LOCAL MODEL · ${overview.payload.model}`
-												: overview.status === "loading"
-													? "LOCAL SYNTHESIS"
-													: "LOCAL EVIDENCE"}
-										</span>
+										<div className="ai-summary-kicker">
+											<span className="related-label">
+												AI OVERVIEW ·{" "}
+												{overview.payload?.model
+													? `LOCAL MODEL · ${overview.payload.model}`
+													: overview.status === "loading"
+														? "LOCAL SYNTHESIS"
+														: "LOCAL EVIDENCE"}
+											</span>
+											<span className="ai-summary-local">
+												<i /> PRIVATE / LOCAL
+											</span>
+										</div>
 										<p>{overview.payload?.overview ?? aiSummary?.intro}</p>
 									</div>
 								</div>
 								{overviewSources.length > 0 && (
 									<div className="ai-summary-sources">
-										<span className="related-label">SELECTED EVIDENCE</span>
+										<div className="ai-summary-evidence-head">
+											<span className="related-label">SELECTED EVIDENCE</span>
+											<span>
+												{overviewSources.length}{" "}
+												{overviewSources.length === 1 ? "SOURCE" : "SOURCES"}
+											</span>
+										</div>
 										<div>
-											{overviewSources.map((document) => (
-												<button
-													type="button"
-													key={document.id}
-													onClick={() => {
-														setSelectedId(document.id);
-														setDetailClosed(false);
-													}}
-												>
-													{cleanDisplayText(document.title)}
-												</button>
-											))}
+											{overviewSources.map((document, index) => {
+												const domain = documentDomain(document);
+												const reliability = sourceReliabilitySignal(domain);
+												return (
+													<button
+														type="button"
+														key={document.id}
+														onClick={() => {
+															setSelectedId(document.id);
+															setDetailClosed(false);
+														}}
+													>
+														<span className="evidence-index">
+															{String(index + 1).padStart(2, "0")}
+														</span>
+														<span
+															className="evidence-domain"
+															aria-hidden="true"
+														>
+															{document.image ? (
+																<img
+																	src={document.image}
+																	alt=""
+																	referrerPolicy="no-referrer"
+																	onError={(event) => {
+																		event.currentTarget.style.display = "none";
+																	}}
+																/>
+															) : (
+																domain.slice(0, 1).toUpperCase()
+															)}
+														</span>
+														<span className="evidence-copy">
+															<strong>
+																{cleanDisplayText(document.title)}
+															</strong>
+															<small>
+																{domain}
+																{reliability > 0
+																	? ` · ${Math.round(reliability * 100)} REL`
+																	: ""}
+															</small>
+														</span>
+													</button>
+												);
+											})}
 										</div>
 									</div>
 								)}
+							</section>
+						)}
+						{mediaSources.length > 0 && (
+							<section
+								className="result-media-strip"
+								aria-label="Visual previews"
+							>
+								<div className="result-media-head">
+									<span className="related-label">VISUAL PREVIEW</span>
+									<span>{mediaSources.length} ITEMS</span>
+								</div>
+								<div className="result-media-grid">
+									{mediaSources.map((document, index) => (
+										<button
+											type="button"
+											key={document.id}
+											onClick={() =>
+												openPage({ url: document.url, title: document.title })
+											}
+											aria-label={`Open ${cleanDisplayText(document.title)}`}
+										>
+											<span className="result-media-frame">
+												<img
+													src={document.image}
+													alt=""
+													referrerPolicy="no-referrer"
+												/>
+												<span>{String(index + 1).padStart(2, "0")}</span>
+											</span>
+											<span className="result-media-copy">
+												<strong>{cleanDisplayText(document.title)}</strong>
+												<small>{documentDomain(document)}</small>
+											</span>
+										</button>
+									))}
+								</div>
 							</section>
 						)}
 						<div className="field-zone">
@@ -685,6 +829,22 @@ export default function App() {
 											<X size={14} />
 										</button>
 									</div>
+									{selected.image && (
+										<button
+											type="button"
+											className="float-visual"
+											onClick={() =>
+												openPage({ url: selected.url, title: selected.title })
+											}
+											aria-label={`Open visual preview for ${cleanDisplayText(selected.title)}`}
+										>
+											<img
+												src={selected.image}
+												alt=""
+												referrerPolicy="no-referrer"
+											/>
+										</button>
+									)}
 									<div className="float-origin">
 										{documentDomain(selected)}
 										<span>

@@ -8,6 +8,7 @@ export type DocumentRecord = {
 	published: string;
 	source: string;
 	entities: string[];
+	image?: string;
 };
 
 export type Posting = {
@@ -65,6 +66,7 @@ export type WebSearchHit = {
 	snippet: string;
 	source: string;
 	position: number;
+	image?: string;
 };
 
 export type WebSearchPayload = {

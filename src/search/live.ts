@@ -354,6 +354,7 @@ export async function searchWikipedia(
 		snippet: cleanDisplayText(hit.snippet),
 		source: "Wikipedia",
 		position: index + 1,
+		image: "https://en.wikipedia.org/favicon.ico",
 	}));
 	return {
 		query,
@@ -408,6 +409,7 @@ export function documentsFromWebSearch(
 			published: "",
 			source: hit.source || payload.provider,
 			entities: [],
+			image: hit.image,
 		});
 	}
 	return documents;

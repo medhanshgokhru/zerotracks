@@ -3,6 +3,91 @@ import { load } from "cheerio";
 const SEARCH_URL = "https://html.duckduckgo.com/html/";
 const MAX_RESULTS = 20;
 const TRACKING_PARAMETERS = /^(utm_.+|fbclid|gclid|mc_cid|mc_eid|ref_src)$/i;
+const imageCache = new Map();
+
+export function extractYouTubeThumbnail(url) {
+	try {
+		const parsed = new URL(url);
+		let videoId = "";
+		if (parsed.hostname === "youtu.be") {
+			videoId = parsed.pathname.slice(1).split("/")[0] ?? "";
+		} else if (/youtube\.com$/i.test(parsed.hostname)) {
+			videoId =
+				parsed.searchParams.get("v") ??
+				parsed.pathname.match(/^\/(?:shorts|embed)\/([^/?]+)/)?.[1] ??
+				"";
+		}
+		return /^[A-Za-z0-9_-]{6,}$/.test(videoId)
+			? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+			: "";
+	} catch {
+		return "";
+	}
+}
+
+export function extractOpenGraphImage(html, pageUrl) {
+	const $ = load(html);
+	const candidates = [
+		$('meta[property="og:image"]').first().attr("content"),
+		$('meta[name="twitter:image"]').first().attr("content"),
+		$('meta[name="twitter:image:src"]').first().attr("content"),
+	];
+	for (const candidate of candidates) {
+		if (!candidate) continue;
+		try {
+			const imageUrl = new URL(candidate, pageUrl);
+			if (imageUrl.protocol === "http:" || imageUrl.protocol === "https:")
+				return imageUrl.href;
+		} catch {
+			// Ignore malformed preview metadata.
+		}
+	}
+	return "";
+}
+
+async function fetchPreviewImage(url, fetchImpl) {
+	const cached = imageCache.get(url);
+	if (cached !== undefined) return cached;
+	try {
+		const response = await fetchImpl(url, {
+			headers: {
+				accept: "text/html",
+				"user-agent": "ZeroTracksSearch/1.0",
+			},
+			signal: AbortSignal.timeout(400),
+		});
+		if (!response.ok) {
+			imageCache.set(url, "");
+			return "";
+		}
+		const contentType = response.headers.get("content-type") ?? "";
+		if (!contentType.includes("text/html")) {
+			imageCache.set(url, "");
+			return "";
+		}
+		const image = extractOpenGraphImage(await response.text(), url);
+		imageCache.set(url, image);
+		return image;
+	} catch {
+		imageCache.set(url, "");
+		return "";
+	}
+}
+
+export async function enrichResultImages(results, fetchImpl = fetch) {
+	await Promise.all(
+		results.slice(0, 4).map(async (result) => {
+			const youtubeImage = extractYouTubeThumbnail(result.url);
+			if (youtubeImage) {
+				result.image = youtubeImage;
+				return;
+			}
+			const ogImage = await fetchPreviewImage(result.url, fetchImpl);
+			if (ogImage) result.image = ogImage;
+		}),
+	);
+	return results;
+}
 
 export class ProviderUnavailableError extends Error {
 	constructor(message = "The search provider is unavailable.") {
@@ -56,6 +141,10 @@ export function parseDuckDuckGoHtml(html, limit = MAX_RESULTS) {
 			.text()
 			.replace(/\s+/g, " ")
 			.trim();
+		const iconSrc = result.find(".result__icon__img").first().attr("src") ?? "";
+		const image = iconSrc
+			? new URL(iconSrc, "https://duckduckgo.com").href
+			: "";
 
 		if (!title || !url || seen.has(url)) return;
 		seen.add(url);
@@ -67,6 +156,7 @@ export function parseDuckDuckGoHtml(html, limit = MAX_RESULTS) {
 			snippet,
 			source: "DuckDuckGo",
 			position: results.length + 1,
+			image,
 		});
 	});
 
@@ -183,5 +273,6 @@ export async function searchDuckDuckGo(query, options = {}) {
 	}
 
 	const html = await response.text();
-	return parseDuckDuckGoHtml(html);
+	const results = parseDuckDuckGoHtml(html);
+	return enrichResultImages(results, fetchImpl);
 }

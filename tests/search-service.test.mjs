@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+	extractOpenGraphImage,
+	extractYouTubeThumbnail,
 	parseDuckDuckGoHtml,
 	rankDuckDuckGoResults,
 	unwrapResultUrl,
@@ -9,6 +11,7 @@ import { createSearchService } from "../server/index.mjs";
 const html = `
 <div class="result">
   <h2><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.org%2Fone%3Futm_source%3Dsearch%23top&amp;rut=private">Example One</a></h2>
+  <img class="result__icon__img" src="//external-content.duckduckgo.com/ip3/example.org.ico" />
   <a class="result__snippet">A useful <b>search</b> result.</a>
 </div>
 <div class="result">
@@ -28,6 +31,18 @@ afterEach(async () => {
 });
 
 describe("DuckDuckGo result parsing", () => {
+	it("derives YouTube thumbnails and Open Graph preview images", () => {
+		expect(
+			extractYouTubeThumbnail("https://www.youtube.com/watch?v=o_YV7lSEbO0"),
+		).toBe("https://i.ytimg.com/vi/o_YV7lSEbO0/hqdefault.jpg");
+		expect(
+			extractOpenGraphImage(
+				'<meta property="og:image" content="/images/preview.jpg">',
+				"https://example.org/page",
+			),
+		).toBe("https://example.org/images/preview.jpg");
+	});
+
 	it("unwraps provider redirects and rejects unsafe URL schemes", () => {
 		expect(
 			unwrapResultUrl(
@@ -49,6 +64,7 @@ describe("DuckDuckGo result parsing", () => {
 			url: "https://example.org/one",
 			domain: "example.org",
 			snippet: "A useful search result.",
+			image: "https://external-content.duckduckgo.com/ip3/example.org.ico",
 		});
 	});
 
