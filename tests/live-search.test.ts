@@ -5,6 +5,7 @@ import {
 	documentsFromWebSearch,
 	indexWebSearch,
 	paginateWebSearch,
+	rankLiveResults,
 	rankRelatedDocuments,
 	searchWikipedia,
 } from "../src/search/live";
@@ -80,6 +81,32 @@ describe("live search result adapters", () => {
 		const summary = buildExtractiveSummary(documents, "privacy search", 2);
 		expect(summary).toHaveLength(2);
 		expect(summary.join(" ").toLocaleLowerCase()).toContain("privacy");
+	});
+
+	it("reranks live hits locally and removes weak query mismatches", () => {
+		const ranked = rankLiveResults(
+			{
+				query: "privacy search",
+				provider: "DuckDuckGo",
+				results: [
+					...payload.results,
+					{
+						id: "weak",
+						title: "General sports news",
+						url: "https://sports.example/",
+						domain: "sports.example",
+						snippet: "Latest scores and schedules.",
+						source: "DuckDuckGo",
+						position: 4,
+					},
+				],
+			},
+			12,
+		);
+		expect(ranked.results.map((result) => result.title)).not.toContain(
+			"General sports news",
+		);
+		expect(ranked.results[0]?.title).toBe("Privacy search guide");
 	});
 
 	it("ranks related live sources by shared text and domain overlap", () => {

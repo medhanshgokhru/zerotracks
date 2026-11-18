@@ -14,6 +14,7 @@ import { documentDomain } from "./search/index";
 import {
 	buildExtractiveSummary,
 	paginateWebSearch,
+	rankLiveResults,
 	rankRelatedDocuments,
 	searchWikipedia,
 } from "./search/live";
@@ -197,7 +198,10 @@ export default function App() {
 	const liveResults = useMemo(
 		() =>
 			livePayload
-				? paginateWebSearch(livePayload, { domain, pageSize: 20 })
+				? paginateWebSearch(rankLiveResults(livePayload, 20), {
+						domain,
+						pageSize: 20,
+					})
 				: null,
 		[livePayload, domain],
 	);

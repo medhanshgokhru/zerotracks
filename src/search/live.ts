@@ -1,5 +1,5 @@
 import { buildIndex, documentDomain, searchableText } from "./index";
-import { tokenize } from "./tokenizer";
+import { normalizeText, tokenize } from "./tokenizer";
 import type {
 	DocumentRecord,
 	SearchIndex,
@@ -15,6 +15,7 @@ export function buildExtractiveSummary(
 	limit = 3,
 ): string[] {
 	const queryTerms = new Set(tokenize(query));
+	const queryPhrase = tokenize(query).join(" ");
 	const candidates = documents.flatMap((document, position) => {
 		const text = `${document.title}. ${document.description}`.trim();
 		const sentences = text
@@ -24,30 +25,113 @@ export function buildExtractiveSummary(
 		return sentences.map((sentence) => ({
 			sentence,
 			position,
-			score:
-				tokenize(sentence).reduce(
-					(count, term) => count + Number(queryTerms.has(term)),
-					0,
-				) + Math.max(0, 2 - position * 0.05),
+			score: (() => {
+				const sentenceTerms = tokenize(sentence);
+				const matched = [...new Set(sentenceTerms)].filter((term) =>
+					queryTerms.has(term),
+				);
+				const coverage =
+					queryTerms.size > 0 ? matched.length / queryTerms.size : 0;
+				const sentenceLengthPenalty =
+					sentence.length > 180 ? (sentence.length - 180) * 0.01 : 0;
+				return (
+					coverage * 8 +
+					matched.length * 2 +
+					(queryPhrase && tokenize(sentence).join(" ").includes(queryPhrase)
+						? 4
+						: 0) +
+					(position === 0 ? 1 : 0) -
+					sentenceLengthPenalty
+				);
+			})(),
 		}));
 	});
 
 	const seen = new Set<string>();
-	return candidates
+	const selected: string[] = [];
+	const selectedTerms = new Set<string>();
+	for (const candidate of [...candidates].sort(
+		(left, right) =>
+			right.score - left.score ||
+			left.position - right.position ||
+			left.sentence.localeCompare(right.sentence),
+	)) {
+		if (selected.length >= Math.max(0, limit)) break;
+		const sentence = candidate.sentence.replace(/[.!?]+$/, "").trim();
+		const key = tokenize(sentence).join(" ");
+		if (!key || seen.has(key)) continue;
+		const terms = tokenize(sentence);
+		const uniqueTerms = [...new Set(terms)];
+		const overlap = uniqueTerms.filter((term) =>
+			selectedTerms.has(term),
+		).length;
+		if (selected.length > 0 && overlap / Math.max(1, uniqueTerms.length) > 0.72)
+			continue;
+		seen.add(key);
+		selected.push(sentence);
+		for (const term of uniqueTerms) selectedTerms.add(term);
+	}
+	return selected;
+}
+
+export function rankLiveResults(
+	payload: WebSearchPayload,
+	limit = 12,
+): WebSearchPayload {
+	const queryTerms = tokenize(payload.query);
+	const domainCounts = new Map<string, number>();
+	const ranked = payload.results
+		.map((result, position) => {
+			const title = normalizeText(result.title);
+			const snippet = normalizeText(result.snippet);
+			const domain = normalizeText(result.domain);
+			let score =
+				queryTerms.reduce((total, term) => {
+					return (
+						total +
+						(title.includes(term) ? 5 : 0) +
+						(snippet.includes(term) ? 3 : 0) +
+						(domain.includes(term) ? 1 : 0)
+					);
+				}, 0) + Math.max(0, 2 - position * 0.08);
+			if (title.length < 12) score -= 2;
+			if (snippet.length < 35) score -= 1;
+			if (/sponsored|advertisement|promo/i.test(`${title} ${snippet}`))
+				score -= 8;
+			return { result, score, position };
+		})
+		.filter(({ result }) => {
+			if (!queryTerms.length) return true;
+			const text = normalizeText(`${result.title} ${result.snippet}`);
+			return queryTerms.some((term) => text.includes(term));
+		})
 		.sort(
 			(left, right) =>
 				right.score - left.score ||
 				left.position - right.position ||
-				left.sentence.localeCompare(right.sentence),
+				left.result.title.localeCompare(right.result.title),
 		)
-		.map(({ sentence }) => sentence.replace(/[.!?]+$/, "").trim())
-		.filter((sentence) => {
-			const key = tokenize(sentence).join(" ");
-			if (!key || seen.has(key)) return false;
-			seen.add(key);
-			return true;
+		.map(({ result, score }, rank) => {
+			const domain = normalizeText(result.domain);
+			const repeats = domainCounts.get(domain) ?? 0;
+			domainCounts.set(domain, repeats + 1);
+			return {
+				...result,
+				position: rank + 1,
+				_relevanceScore: score - repeats * 0.75,
+			};
 		})
-		.slice(0, Math.max(0, limit));
+		.sort(
+			(left, right) =>
+				right._relevanceScore - left._relevanceScore ||
+				left.position - right.position,
+		)
+		.slice(0, Math.max(0, limit))
+		.map(({ _relevanceScore, ...result }, index) => ({
+			...result,
+			position: index + 1,
+		}));
+	return { ...payload, results: ranked };
 }
 
 export async function searchWikipedia(

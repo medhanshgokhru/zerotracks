@@ -1,6 +1,10 @@
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
-import { ProviderUnavailableError, searchDuckDuckGo } from "./duckduckgo.mjs";
+import {
+	ProviderUnavailableError,
+	rankDuckDuckGoResults,
+	searchDuckDuckGo,
+} from "./duckduckgo.mjs";
 
 const DEFAULT_ORIGINS = [
 	"http://localhost:5173",
@@ -127,10 +131,11 @@ export function createSearchService(options = {}) {
 			const results = await search(query, {
 				signal: AbortSignal.timeout(10_000),
 			});
+			const rankedResults = rankDuckDuckGoResults(results, query);
 			sendJson(response, 200, {
 				query,
 				provider: "DuckDuckGo",
-				results: results.slice(0, MAX_RESULTS),
+				results: rankedResults.slice(0, MAX_RESULTS),
 			});
 		} catch (error) {
 			const status = error instanceof ProviderUnavailableError ? 502 : 500;

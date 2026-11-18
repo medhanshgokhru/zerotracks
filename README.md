@@ -6,6 +6,8 @@ When the optional Node gateway is unavailable, GitHub Pages uses Wikipedia's pub
 
 ZeroTracks does not use AI models, API keys, accounts, cookies, or a hosted ZeroTracks search provider. This is a small metasearch prototype, not a Google-scale crawler or independent web index. Provider HTML can change or be rate-limited.
 
+Search results are ranked locally with deterministic relevance scoring based on query terms in titles, descriptions, domains, and result position. Weak or unrelated matches are removed, redundant domains are deprioritized, and the at-a-glance summary uses extractive, on-device text selection. No AI model, AI API, or third-party summarization service is used.
+
 **Privacy pledge:** Searches are sent to the configured live gateway and upstream provider. ZeroTracks does not send searches directly from the browser to DuckDuckGo or maintain a local search index.
 
 ## Run locally

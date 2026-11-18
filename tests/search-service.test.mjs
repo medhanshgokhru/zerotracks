@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { parseDuckDuckGoHtml, unwrapResultUrl } from "../server/duckduckgo.mjs";
+import {
+	parseDuckDuckGoHtml,
+	rankDuckDuckGoResults,
+	unwrapResultUrl,
+} from "../server/duckduckgo.mjs";
 import { createSearchService } from "../server/index.mjs";
 
 const html = `
@@ -48,6 +52,34 @@ describe("DuckDuckGo result parsing", () => {
 		});
 	});
 
+	it("ranks relevant DuckDuckGo hits ahead of weak matches", () => {
+		const results = rankDuckDuckGoResults(
+			[
+				{
+					id: "weak",
+					title: "Unrelated page",
+					url: "https://weak.example/",
+					domain: "weak.example",
+					snippet: "General information.",
+					source: "DuckDuckGo",
+					position: 1,
+				},
+				{
+					id: "strong",
+					title: "Climate data guide",
+					url: "https://climate.example/",
+					domain: "climate.example",
+					snippet: "Climate data for ocean temperature research.",
+					source: "DuckDuckGo",
+					position: 2,
+				},
+			],
+			"climate data",
+			12,
+		);
+		expect(results.map((result) => result.id)).toEqual(["strong"]);
+	});
+
 	it("returns stateless, no-store results and rejects invalid or disallowed requests", async () => {
 		const server = createSearchService({
 			allowedOrigins: ["https://search.example"],
@@ -55,10 +87,10 @@ describe("DuckDuckGo result parsing", () => {
 			search: async (query) => [
 				{
 					id: query,
-					title: "Hit",
+					title: "Private search result",
 					url: "https://example.org/",
 					domain: "example.org",
-					snippet: "Snippet",
+					snippet: "A private query search result.",
 					source: "Test",
 					position: 1,
 				},
@@ -86,7 +118,7 @@ describe("DuckDuckGo result parsing", () => {
 		);
 		expect(await response.json()).toMatchObject({
 			query: "private query",
-			results: [{ title: "Hit" }],
+			results: [{ title: "Private search result" }],
 		});
 		const limited = await fetch(`${base}/api/search`, {
 			method: "POST",
