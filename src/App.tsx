@@ -14,6 +14,7 @@ import { documentDomain } from "./search/index";
 import {
 	buildAiSummary,
 	buildExtractiveSummary,
+	isVerifiedOverviewSource,
 	paginateWebSearch,
 	rankLiveResults,
 	rankRelatedDocuments,
@@ -332,9 +333,15 @@ export default function App() {
 		const sourceIds = new Set(overview.payload?.sourceIds ?? []);
 		const evidence =
 			sourceIds.size > 0
-				? records.filter((document) => sourceIds.has(document.id))
+				? records
+						.filter((document) => sourceIds.has(document.id))
+						.filter((document) =>
+							isVerifiedOverviewSource(document, submittedQuery),
+						)
 				: records
 						.filter((document) => {
+							if (!isVerifiedOverviewSource(document, submittedQuery))
+								return false;
 							const domain = documentDomain(document).toLowerCase();
 							const title = cleanDisplayText(document.title).toLowerCase();
 							return (
@@ -375,7 +382,7 @@ export default function App() {
 				);
 			})
 			.slice(0, 3);
-	}, [overview.payload?.sourceIds, records]);
+	}, [overview.payload?.sourceIds, records, submittedQuery]);
 	const domains = useMemo(
 		() => [...new Set(records.map(documentDomain))].sort(),
 		[records],
@@ -682,7 +689,7 @@ export default function App() {
 								{overviewSources.length > 0 && (
 									<div className="ai-summary-sources">
 										<div className="ai-summary-evidence-head">
-											<span className="related-label">SELECTED EVIDENCE</span>
+											<span className="related-label">VERIFIED EVIDENCE</span>
 											<span>
 												{overviewSources.length}{" "}
 												{overviewSources.length === 1 ? "SOURCE" : "SOURCES"}

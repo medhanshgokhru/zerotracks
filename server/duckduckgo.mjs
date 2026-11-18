@@ -187,6 +187,7 @@ function queryTerms(query) {
 
 export function rankDuckDuckGoResults(results, query, limit = 12) {
 	const terms = queryTerms(query);
+	const compactQuery = terms.join("");
 	const domainCounts = new Map();
 	const ranked = results
 		.map((result, position) => {
@@ -194,6 +195,38 @@ export function rankDuckDuckGoResults(results, query, limit = 12) {
 			const snippet = result.snippet.toLocaleLowerCase("en-US");
 			const domain = result.domain.toLocaleLowerCase("en-US");
 			let score = 0;
+			const normalizedDomain = domain.replace(/^(www\.|m\.)/, "");
+			const labels = normalizedDomain.split(".");
+			const rootDomain =
+				labels.length >= 3 &&
+				(labels.at(-2) === "co" ||
+					labels.at(-2) === "com" ||
+					labels.at(-2) === "org")
+					? labels.slice(-3).join(".")
+					: labels.slice(-2).join(".");
+			const domainBase = rootDomain.split(".")[0];
+			if (
+				terms.length === 1 &&
+				(domainBase === compactQuery ||
+					rootDomain.startsWith(`${compactQuery}.`) ||
+					normalizedDomain === `${compactQuery}.com` ||
+					normalizedDomain === `${compactQuery}.org`)
+			)
+				score += 120;
+			else if (
+				terms.length === 1 &&
+				(normalizedDomain.includes(`.${compactQuery}.`) ||
+					normalizedDomain.endsWith(`.${compactQuery}.com`) ||
+					normalizedDomain.endsWith(`.${compactQuery}.org`))
+			)
+				score += 55;
+			if (
+				(/^(www\.)?(facebook|instagram|twitter|tiktok|youtube)\./.test(domain) ||
+					/wikipedia\.org$/i.test(domain)) &&
+				!terms.includes(domainBase)
+			)
+				score -= 25;
+			if (title === terms.join(" ")) score += 12;
 
 			for (const term of terms) {
 				if (title.includes(term)) score += 5;

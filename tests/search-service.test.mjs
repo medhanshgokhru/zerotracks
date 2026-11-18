@@ -96,6 +96,43 @@ describe("DuckDuckGo result parsing", () => {
 		expect(results.map((result) => result.id)).toEqual(["strong"]);
 	});
 
+	it("prioritizes the official domain for ambiguous brand searches", () => {
+		const results = rankDuckDuckGoResults(
+			[
+				{
+					id: "wikipedia",
+					title: "Amazon - Wikipedia",
+					url: "https://en.wikipedia.org/wiki/Amazon",
+					domain: "en.wikipedia.org",
+					snippet: "Amazon may refer to several topics.",
+					source: "DuckDuckGo",
+					position: 1,
+				},
+				{
+					id: "facebook",
+					title: "Amazon - Facebook",
+					url: "https://www.facebook.com/Amazon/",
+					domain: "www.facebook.com",
+					snippet: "Official Amazon social page.",
+					source: "DuckDuckGo",
+					position: 2,
+				},
+				{
+					id: "amazon",
+					title: "Amazon.com",
+					url: "https://www.amazon.com/",
+					domain: "www.amazon.com",
+					snippet: "Shop for electronics, books, and more.",
+					source: "DuckDuckGo",
+					position: 3,
+				},
+			],
+			"amazon",
+			12,
+		);
+		expect(results[0].id).toBe("amazon");
+	});
+
 	it("returns stateless, no-store results and rejects invalid or disallowed requests", async () => {
 		const server = createSearchService({
 			allowedOrigins: ["https://search.example"],

@@ -20,6 +20,45 @@ export function sourceReliabilitySignal(domain: string): number {
 	return 0;
 }
 
+export function isVerifiedOverviewSource(
+	document: DocumentRecord,
+	query: string,
+): boolean {
+	const domain = documentDomain(document).toLocaleLowerCase("en-US");
+	const normalized = domain.replace(/^www\./, "");
+	const queryTerms = tokenize(query);
+	const compactQuery = queryTerms.join("");
+	const labels = normalized.split(".");
+	const rootDomain =
+		labels.length >= 3 && (labels.at(-2) === "com" || labels.at(-2) === "org")
+			? labels.slice(-3).join(".")
+			: labels.slice(-2).join(".");
+	const domainBase = rootDomain.split(".")[0];
+	const isOfficialQueryDomain =
+		queryTerms.length === 1 &&
+		(domainBase === compactQuery ||
+			rootDomain.startsWith(`${compactQuery}.`) ||
+			normalized === `${compactQuery}.com` ||
+			normalized === `${compactQuery}.org`);
+	if (
+		normalized === "facebook.com" ||
+		normalized.endsWith(".facebook.com") ||
+		normalized === "instagram.com" ||
+		normalized.endsWith(".instagram.com") ||
+		normalized === "x.com" ||
+		normalized.endsWith(".x.com") ||
+		normalized === "tiktok.com" ||
+		normalized.endsWith(".tiktok.com")
+	)
+		return false;
+	return (
+		isOfficialQueryDomain ||
+		sourceReliabilitySignal(normalized) > 0 ||
+		normalized === "www.imdb.com" ||
+		normalized === "imdb.com"
+	);
+}
+
 export function buildExtractiveSummary(
 	documents: DocumentRecord[],
 	query: string,
@@ -206,6 +245,7 @@ export function buildAiSummary(
 	const terms = [...new Set(tokenize(cleanQuery))].slice(0, 3);
 	const focus = terms.length ? terms.join(", ") : "the current topic";
 	const snippets = [...documents]
+		.filter((document) => isVerifiedOverviewSource(document, cleanQuery))
 		.sort(
 			(left, right) =>
 				overviewSourceRank(right, terms) - overviewSourceRank(left, terms),
@@ -263,6 +303,9 @@ export function rankLiveResults(
 			const title = cleanDisplayText(result.title);
 			const snippet = cleanDisplayText(result.snippet);
 			const domain = normalizeText(result.domain);
+			const rawDomain = result.domain
+				.toLocaleLowerCase("en-US")
+				.replace(/^www\./, "");
 			let score =
 				queryTerms.reduce((total, term) => {
 					return (
@@ -274,6 +317,41 @@ export function rankLiveResults(
 				}, 0) +
 				Math.max(0, 2 - position * 0.08) +
 				sourceReliabilitySignal(domain) * 0.8;
+			const labels = rawDomain.split(".");
+			const rootDomain =
+				labels.length >= 3 &&
+				(labels.at(-2) === "co" ||
+					labels.at(-2) === "com" ||
+					labels.at(-2) === "org")
+					? labels.slice(-3).join(".")
+					: labels.slice(-2).join(".");
+			const domainBase = rootDomain.split(".")[0];
+			const compactQuery = queryTerms.join("");
+			if (
+				queryTerms.length === 1 &&
+				(domainBase === compactQuery ||
+					rootDomain.startsWith(`${compactQuery}.`) ||
+					rawDomain === `${compactQuery}.com` ||
+					rawDomain === `${compactQuery}.org`)
+			)
+				score += 120;
+			else if (
+				queryTerms.length === 1 &&
+				(rawDomain.includes(`.${compactQuery}.`) ||
+					rawDomain.endsWith(`.${compactQuery}.com`) ||
+					rawDomain.endsWith(`.${compactQuery}.org`))
+			)
+				score += 55;
+			if (
+				(/^(www\.)?(facebook|instagram|twitter|tiktok|youtube)\./.test(
+					rawDomain,
+				) ||
+					/wikipedia\.org$/i.test(rawDomain)) &&
+				!queryTerms.includes(domainBase)
+			)
+				score -= 25;
+			if (title.toLocaleLowerCase("en-US") === queryTerms.join(" "))
+				score += 12;
 			if (title.length < 12) score -= 2;
 			if (snippet.length < 35) score -= 1;
 			if (/sponsored|advertisement|promo/i.test(`${title} ${snippet}`))

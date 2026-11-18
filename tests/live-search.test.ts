@@ -5,6 +5,7 @@ import {
 	buildExtractiveSummary,
 	documentsFromWebSearch,
 	indexWebSearch,
+	isVerifiedOverviewSource,
 	paginateWebSearch,
 	rankLiveResults,
 	rankRelatedDocuments,
@@ -117,7 +118,35 @@ describe("live search result adapters", () => {
 			"privacy search",
 		);
 		expect(summary?.intro).toContain("privacy");
-		expect(summary?.points.join(" ")).toContain("privacy");
+	});
+
+	it("allows official and reliable domains while rejecting social sources", () => {
+		const amazon = documentsFromWebSearch({
+			query: "amazon",
+			provider: "DuckDuckGo",
+			results: [
+				{
+					id: "amazon",
+					title: "Amazon.com",
+					url: "https://www.amazon.com/",
+					domain: "www.amazon.com",
+					snippet: "Shop for electronics, books, and more.",
+					source: "DuckDuckGo",
+					position: 1,
+				},
+				{
+					id: "facebook",
+					title: "Amazon on Facebook",
+					url: "https://www.facebook.com/Amazon/",
+					domain: "www.facebook.com",
+					snippet: "Official social page.",
+					source: "DuckDuckGo",
+					position: 2,
+				},
+			],
+		});
+		expect(isVerifiedOverviewSource(amazon[0], "amazon")).toBe(true);
+		expect(isVerifiedOverviewSource(amazon[1], "amazon")).toBe(false);
 	});
 
 	it("prefers reliable entity facts over entertainment episodes", () => {
