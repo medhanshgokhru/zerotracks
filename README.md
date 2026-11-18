@@ -1,12 +1,12 @@
 # ZeroTracks
 
-ZeroTracks is a live web source-network search engine: search the web through a gateway, inspect overlapping language and domains, and jump to the strongest related live sources. Results appear as selectable nodes with a floating source inspector, API-free extractive at-a-glance synthesis, and ranked related-evidence list.
+ZeroTracks is a live web source-network search engine: search the web through a gateway, inspect overlapping language and domains, and jump to the strongest related live sources. Results appear as selectable nodes with a floating source inspector, a local-model AI overview, and ranked related-evidence list.
 
 When the optional Node gateway is unavailable, GitHub Pages uses Wikipedia's public CORS-enabled search API as a live provider fallback. This is clearly labeled and is not a bundled/local fallback.
 
-ZeroTracks does not use AI models, API keys, accounts, cookies, or a hosted ZeroTracks search provider. This is a small metasearch prototype, not a Google-scale crawler or independent web index. Provider HTML can change or be rate-limited.
+ZeroTracks does not use hosted AI APIs, API keys, accounts, or cookies. This is a small metasearch prototype, not a Google-scale crawler or independent web index. Provider HTML can change or be rate-limited.
 
-Search results are ranked locally with deterministic relevance scoring based on query terms in titles, descriptions, domains, and result position. Weak or unrelated matches are removed, redundant domains are deprioritized, and the at-a-glance summary uses extractive, on-device text selection. No AI model, AI API, or third-party summarization service is used.
+Search results are ranked locally with deterministic relevance and domain-reliability signals. Weak or unrelated matches are removed, redundant domains are deprioritized, and the AI overview runs in a browser Web Worker using the bundled Qwen2.5-0.5B ONNX model.
 
 **Privacy pledge:** Searches are sent to the configured live gateway and upstream provider. ZeroTracks does not send searches directly from the browser to DuckDuckGo or maintain a local search index.
 
@@ -22,6 +22,8 @@ npm run dev
 `npm run dev` starts the Vite frontend and the Node search service. The frontend uses `/api` in development and requires the Node service to remain available. Node.js 20.19+ or 22.12+ is required; the Pages workflow uses Node.js 24.
 
 To run only the search service, use `npm run search`. It listens on `127.0.0.1:8788` by default and writes no query/access logs. Configure `SEARCH_HOST=0.0.0.0` only when exposing it on your own server, and set an exact `ALLOWED_ORIGINS` list.
+
+The AI overview is project-contained and local-only. The browser loads the Git LFS-tracked Qwen2.5-0.5B ONNX model from `public/models/` and disables remote model loading. No Ollama process or hosted AI provider is required. If the model files are unavailable, the UI shows deterministic evidence synthesis instead.
 
 ## Commands
 
@@ -67,9 +69,6 @@ The frontend is static and deploys through [.github/workflows/deploy.yml](.githu
 
 In repository settings, select **Pages → Build and deployment → GitHub Actions**. The project-site base path is configured automatically. No provider API key is required.
 
-## No AI
-
-ZeroTracks does not use AI model APIs or local language models. Local ranking and graph relationships are deterministic algorithms.
 
 ## License
 

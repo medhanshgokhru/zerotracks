@@ -1,7 +1,7 @@
 import { Maximize, Minus, Plus } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { documentDomain, searchableText } from "../search/index";
-import { tokenize } from "../search/tokenizer";
+import { cleanDisplayText, tokenize } from "../search/tokenizer";
 import type { DocumentRecord } from "../search/types";
 
 type Props = {
@@ -121,7 +121,7 @@ export default function ConnectedField({
 								transform={`translate(${point.x} ${point.y})`}
 								role="button"
 								tabIndex={0}
-								aria-label={`${index + 1}. ${document.title}`}
+								aria-label={`${index + 1}. ${cleanDisplayText(document.title)}`}
 								aria-pressed={selected}
 								onClick={() => onSelect(document)}
 								onKeyDown={(event) => {
@@ -143,9 +143,9 @@ export default function ConnectedField({
 									{String(index + 1).padStart(2, "0")}
 								</text>
 								<text className="string-node-label" x="4" y="0.8">
-									{document.title.length > 25
-										? `${document.title.slice(0, 22)}...`
-										: document.title}
+									{cleanDisplayText(document.title).length > 25
+										? `${cleanDisplayText(document.title).slice(0, 22)}...`
+										: cleanDisplayText(document.title)}
 								</text>
 								<text className="string-node-domain" x="4" y="3.2">
 									{documentDomain(document)}

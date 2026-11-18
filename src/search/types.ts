@@ -73,6 +73,13 @@ export type WebSearchPayload = {
 	results: WebSearchHit[];
 };
 
+export type LocalOverview = {
+	overview: string;
+	keyPoints: string[];
+	sourceIds: string[];
+	model: string;
+};
+
 export type GraphNode = {
 	id: string;
 	label: string;

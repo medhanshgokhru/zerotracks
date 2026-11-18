@@ -12,13 +12,19 @@ import {
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { documentDomain } from "./search/index";
 import {
+	buildAiSummary,
 	buildExtractiveSummary,
 	paginateWebSearch,
 	rankLiveResults,
 	rankRelatedDocuments,
 	searchWikipedia,
 } from "./search/live";
-import type { DocumentRecord, WebSearchPayload } from "./search/types";
+import { cleanDisplayText } from "./search/tokenizer";
+import type {
+	DocumentRecord,
+	LocalOverview,
+	WebSearchPayload,
+} from "./search/types";
 import { isValidExternalUrl } from "./search/url";
 
 const SEARCH_API_BASE =
@@ -29,6 +35,12 @@ type LiveSearchState = {
 	query: string;
 	status: "idle" | "loading" | "ready" | "error";
 	payload?: WebSearchPayload;
+	error?: string;
+};
+
+type OverviewState = {
+	status: "idle" | "loading" | "ready" | "unavailable";
+	payload?: LocalOverview;
 	error?: string;
 };
 
@@ -86,6 +98,7 @@ export default function App() {
 		query: "",
 		status: "idle",
 	});
+	const [overview, setOverview] = useState<OverviewState>({ status: "idle" });
 	const [selectedId, setSelectedId] = useState("");
 	const [detailClosed, setDetailClosed] = useState(false);
 	const [domain, setDomain] = useState("all");
@@ -95,6 +108,8 @@ export default function App() {
 	const [theme, setTheme] = useState<Theme>(getStoredTheme);
 	const searchRef = useRef<HTMLInputElement>(null);
 	const addressRef = useRef<HTMLInputElement>(null);
+	const overviewWorkerRef = useRef<Worker | null>(null);
+	const overviewRequestRef = useRef(0);
 
 	useEffect(() => {
 		document.documentElement.dataset.theme = theme;
@@ -111,6 +126,41 @@ export default function App() {
 				.register(`${import.meta.env.BASE_URL}service-worker.js`)
 				.catch(() => undefined);
 		}
+	}, []);
+
+	useEffect(() => {
+		const worker = new Worker(
+			new URL("./search/local-overview.worker.ts", import.meta.url),
+			{ type: "module" },
+		);
+		overviewWorkerRef.current = worker;
+		worker.onmessage = (
+			event: MessageEvent<
+				| { type: "ready"; overview: LocalOverview; requestId: number }
+				| { type: "error"; message: string; requestId?: number }
+			>,
+		) => {
+			if (
+				event.data.type === "error" &&
+				event.data.requestId !== overviewRequestRef.current
+			)
+				return;
+			if (event.data.type === "ready")
+				setOverview({ status: "ready", payload: event.data.overview });
+			else {
+				console.warn("Local overview model unavailable:", event.data.message);
+				setOverview({ status: "unavailable", error: event.data.message });
+			}
+		};
+		worker.onerror = (event) => {
+			console.warn("Local overview worker failed:", event.message);
+			setOverview({ status: "unavailable", error: event.message });
+		};
+		worker.postMessage({ type: "warmup" });
+		return () => {
+			worker.terminate();
+			overviewWorkerRef.current = null;
+		};
 	}, []);
 
 	useEffect(() => {
@@ -195,6 +245,28 @@ export default function App() {
 		liveSearch.query === submittedQuery && liveSearch.status === "ready"
 			? liveSearch.payload
 			: undefined;
+	useEffect(() => {
+		if (!livePayload || !submittedQuery) {
+			setOverview({ status: "idle" });
+			return;
+		}
+		setOverview({ status: "loading" });
+		const requestId = overviewRequestRef.current + 1;
+		overviewRequestRef.current = requestId;
+		const timeout = window.setTimeout(() => {
+			if (overviewRequestRef.current === requestId)
+				setOverview({ status: "unavailable" });
+		}, 180_000);
+		overviewWorkerRef.current?.postMessage({
+			type: "summarize",
+			requestId,
+			query: submittedQuery,
+			results: livePayload.results,
+		});
+		return () => {
+			window.clearTimeout(timeout);
+		};
+	}, [livePayload, submittedQuery]);
 	const liveResults = useMemo(
 		() =>
 			livePayload
@@ -227,6 +299,20 @@ export default function App() {
 		() => buildExtractiveSummary(records, submittedQuery, 3),
 		[records, submittedQuery],
 	);
+	const aiSummary = useMemo(
+		() => buildAiSummary(records, submittedQuery, 3),
+		[records, submittedQuery],
+	);
+	const overviewSources = useMemo(() => {
+		const sourceIds = new Set(overview.payload?.sourceIds ?? []);
+		return (
+			livePayload?.results.flatMap((hit, index) => {
+				if (!sourceIds.has(hit.id)) return [];
+				const document = records[index];
+				return document ? [document] : [];
+			}) ?? []
+		);
+	}, [livePayload, overview.payload?.sourceIds, records]);
 	const domains = useMemo(
 		() => [...new Set(records.map(documentDomain))].sort(),
 		[records],
@@ -507,6 +593,45 @@ export default function App() {
 								</select>
 							</div>
 						</div>
+						{(overview.payload ||
+							aiSummary ||
+							overview.status === "loading") && (
+							<section className="ai-summary" aria-label="AI summary">
+								<div className="ai-summary-head">
+									<span className="ai-summary-mark">✦</span>
+									<div>
+										<span className="related-label">
+											AI OVERVIEW ·{" "}
+											{overview.payload?.model
+												? `LOCAL MODEL · ${overview.payload.model}`
+												: overview.status === "loading"
+													? "LOCAL SYNTHESIS"
+													: "LOCAL EVIDENCE"}
+										</span>
+										<p>{overview.payload?.overview ?? aiSummary?.intro}</p>
+									</div>
+								</div>
+								{overviewSources.length > 0 && (
+									<div className="ai-summary-sources">
+										<span className="related-label">SELECTED EVIDENCE</span>
+										<div>
+											{overviewSources.map((document) => (
+												<button
+													type="button"
+													key={document.id}
+													onClick={() => {
+														setSelectedId(document.id);
+														setDetailClosed(false);
+													}}
+												>
+													{cleanDisplayText(document.title)}
+												</button>
+											))}
+										</div>
+									</div>
+								)}
+							</section>
+						)}
 						<div className="field-zone">
 							{pending ? (
 								<div className="field-state">
@@ -571,8 +696,8 @@ export default function App() {
 											).padStart(2, "0")}
 										</span>
 									</div>
-									<h2>{selected.title}</h2>
-									<p>{selected.description}</p>
+									<h2>{cleanDisplayText(selected.title)}</h2>
+									<p>{cleanDisplayText(selected.description)}</p>
 									{atAGlance.length > 0 && (
 										<div className="at-a-glance">
 											<span className="related-label">AT A GLANCE</span>
@@ -598,7 +723,9 @@ export default function App() {
 														}}
 													>
 														<span>
-															<strong>{document.title}</strong>
+															<strong>
+																{cleanDisplayText(document.title)}
+															</strong>
 															<small>{documentDomain(document)}</small>
 														</span>
 														<b>{overlap} overlap</b>

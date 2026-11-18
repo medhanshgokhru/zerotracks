@@ -16,6 +16,7 @@
 		"lint": "biome check src scripts tests vite.config.ts"
 	},
 	"dependencies": {
+		"@huggingface/transformers": "^3.8.1",
 		"cheerio": "^1.2.0",
 		"lucide-react": "^0.468.0",
 		"react": "^19.0.0",

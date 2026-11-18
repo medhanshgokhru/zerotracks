@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildInvestigationGraph } from "../src/graph/relationships";
 import {
+	buildAiSummary,
 	buildExtractiveSummary,
 	documentsFromWebSearch,
 	indexWebSearch,
@@ -8,7 +9,9 @@ import {
 	rankLiveResults,
 	rankRelatedDocuments,
 	searchWikipedia,
+	sourceReliabilitySignal,
 } from "../src/search/live";
+import { cleanDisplayText } from "../src/search/tokenizer";
 import type { WebSearchPayload } from "../src/search/types";
 
 const payload: WebSearchPayload = {
@@ -46,6 +49,15 @@ const payload: WebSearchPayload = {
 };
 
 describe("live search result adapters", () => {
+	it("cleans markup, entities, and invisible formatting from display text", () => {
+		expect(cleanDisplayText("• <b>Privacy</b>&nbsp;search\u200b")).toBe(
+			"Privacy search",
+		);
+		expect(cleanDisplayText("&quot;Hi&quot; &amp; HI&#039;")).toBe(
+			'"Hi" & HI\'',
+		);
+	});
+
 	it("provides a CORS-enabled Wikipedia fallback without a gateway", async () => {
 		const payload = await searchWikipedia("privacy", {
 			fetchImpl: async () =>
@@ -83,6 +95,162 @@ describe("live search result adapters", () => {
 		expect(summary.join(" ").toLocaleLowerCase()).toContain("privacy");
 	});
 
+	it("keeps a disambiguation page to one representative summary point", () => {
+		const documents = documentsFromWebSearch({
+			...payload,
+			results: [
+				{
+					...payload.results[0],
+					snippet:
+						"Hi or Hi may refer to: &quot;Hi&quot;, a song; Hi Records; Hi-Q games.",
+				},
+			],
+		});
+		const summary = buildExtractiveSummary(documents, "hi", 3);
+		expect(summary).toHaveLength(1);
+		expect(summary[0]).not.toContain("&quot;");
+	});
+
+	it("builds a local AI summary from the current result set", () => {
+		const summary = buildAiSummary(
+			documentsFromWebSearch(payload),
+			"privacy search",
+		);
+		expect(summary?.intro).toContain("privacy");
+		expect(summary?.points.join(" ")).toContain("privacy");
+	});
+
+	it("prefers reliable entity facts over entertainment episodes", () => {
+		const mickeyPayload: WebSearchPayload = {
+			query: "mickey mouse",
+			provider: "DuckDuckGo",
+			results: [
+				{
+					id: "episode",
+					title: "Mickey Mouse Clubhouse Full Episodes Compilation",
+					url: "https://www.youtube.com/watch?v=episode",
+					domain: "www.youtube.com",
+					snippet:
+						"Mickey and friends solve problems in a series of play along episodes.",
+					source: "DuckDuckGo",
+					position: 1,
+				},
+				{
+					id: "wiki",
+					title: "Mickey Mouse - Wikipedia",
+					url: "https://en.wikipedia.org/wiki/Mickey_Mouse",
+					domain: "en.wikipedia.org",
+					snippet:
+						"Mickey Mouse is an animated cartoon character co-created in 1928 by Walt Disney and Ub Iwerks.",
+					source: "DuckDuckGo",
+					position: 2,
+				},
+				{
+					id: "britannica",
+					title: "Mickey Mouse | Cartoon, Creation, Disney",
+					url: "https://www.britannica.com/topic/Mickey-Mouse",
+					domain: "www.britannica.com",
+					snippet:
+						"Mickey Mouse is a cartoon character created by Walt Disney and Ub Iwerks.",
+					source: "DuckDuckGo",
+					position: 3,
+				},
+			],
+		};
+		const summary = buildAiSummary(
+			documentsFromWebSearch(mickeyPayload),
+			"mickey mouse",
+		);
+		expect(summary?.intro).toContain("co-created");
+		expect(summary?.intro).not.toContain("episodes");
+		expect(summary?.intro).not.toContain("Compilation");
+	});
+
+	it("removes social metrics and citation noise from entity summaries", () => {
+		const bhuvanPayload: WebSearchPayload = {
+			query: "bhuvan bam",
+			provider: "DuckDuckGo",
+			results: [
+				{
+					id: "instagram",
+					title: "Bhuvan Bam (@bhuvan.bam)",
+					url: "https://www.instagram.com/bhuvan.bam/",
+					domain: "www.instagram.com",
+					snippet:
+						"21M Followers, 313 Following, 1,723 Posts - Bhuvan Bam (@bhuvan.bam)",
+					source: "DuckDuckGo",
+					position: 1,
+				},
+				{
+					id: "wiki",
+					title: "Bhuvan Bam - Wikipedia",
+					url: "https://en.wikipedia.org/wiki/Bhuvan_Bam",
+					domain: "en.wikipedia.org",
+					snippet:
+						"Bhuvan Avnindra Shankar Bam (pronounced [ˈbʱʊʋən baːm]; born 22 January 1994) [1][2] is an Indian comedian.",
+					source: "DuckDuckGo",
+					position: 2,
+				},
+			],
+		};
+		const summary = buildAiSummary(
+			documentsFromWebSearch(bhuvanPayload),
+			"Bhuvan Bam",
+		);
+		expect(summary?.intro).toContain("Indian comedian");
+		expect(summary?.intro).not.toContain("Followers");
+		expect(summary?.intro).not.toContain("[1]");
+		expect(summary?.intro).not.toContain("pronounced");
+	});
+
+	it("prefers an entertainment profile over biography and gossip SEO", () => {
+		const ashishPayload: WebSearchPayload = {
+			query: "ashish chanchlani",
+			provider: "DuckDuckGo",
+			results: [
+				{
+					id: "gossip",
+					title:
+						"Before Arshdeep Singh, Was Samreen Kaur Dating Ashish Chanchlani?",
+					url: "https://www.newsx.com/entertainment/dating",
+					domain: "www.newsx.com",
+					snippet:
+						"Before getting engaged to Arshdeep Singh, Samreen Kaur was linked to Ashish Chanchlani.",
+					source: "DuckDuckGo",
+					position: 1,
+				},
+				{
+					id: "seo",
+					title: "Ashish Chanchlani Biography, Age, Girlfriend, Net Worth",
+					url: "https://leaderbiography.com/ashish-chanchlani/",
+					domain: "leaderbiography.com",
+					snippet:
+						"Ashish Chanchlani biography, age, girlfriend, family, career, YouTube, net worth.",
+					source: "DuckDuckGo",
+					position: 2,
+				},
+				{
+					id: "imdb",
+					title: "Ashish Chanchlani - IMDb",
+					url: "https://www.imdb.com/name/nm9163913/",
+					domain: "www.imdb.com",
+					snippet:
+						"Ashish Chanchlani is an Indian comedian, actor, writer, and director best known for creating Ashish Chanchlani Vines.",
+					source: "DuckDuckGo",
+					position: 3,
+				},
+			],
+		};
+		const summary = buildAiSummary(
+			documentsFromWebSearch(ashishPayload),
+			"ashish chanchlani",
+		);
+		expect(summary?.intro).toContain("Indian comedian");
+		expect(summary?.intro).not.toContain("dating");
+		expect(summary?.intro).not.toContain("girlfriend");
+		expect(summary?.intro).not.toContain("net worth");
+	});
+
 	it("reranks live hits locally and removes weak query mismatches", () => {
 		const ranked = rankLiveResults(
 			{
@@ -107,6 +275,13 @@ describe("live search result adapters", () => {
 			"General sports news",
 		);
 		expect(ranked.results[0]?.title).toBe("Privacy search guide");
+	});
+
+	it("adds only a small reliability signal to trusted domain types", () => {
+		expect(sourceReliabilitySignal("agency.gov")).toBeGreaterThan(
+			sourceReliabilitySignal("example.com"),
+		);
+		expect(sourceReliabilitySignal("example.com")).toBe(0);
 	});
 
 	it("ranks related live sources by shared text and domain overlap", () => {

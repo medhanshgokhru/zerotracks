@@ -28,6 +28,8 @@ Live provider hits are adapted into the document inspector and deterministic rel
 
 The gateway necessarily receives the user's query and source IP. The upstream provider receives the query and the gateway's IP. ZeroTracks does not write application query logs, but reverse proxies, hosting infrastructure, and the provider have separate policies and may retain network metadata. This design is not anonymous and does not provide Tor routing or browser/operating-system protections.
 
+The AI overview runs in `src/search/local-overview.worker.ts`, not in the gateway. Transformers.js WASM loads the Git LFS-tracked Qwen2.5-0.5B ONNX files from `public/models/qwen2.5-0.5b-instruct/` with remote model loading disabled. The worker receives only current result titles, domains, and snippets, and returns an evidence-grounded overview plus cited result IDs. If the bundled model is unavailable, the frontend uses deterministic local synthesis.
+
 ## Deployment
 
 GitHub Pages hosts only the static `dist/` frontend. Host the Node gateway separately over HTTPS and configure `ZEROTRACKS_SEARCH_API_URL` as a repository Actions variable. Configure the gateway's `ALLOWED_ORIGINS` with the exact Pages origin. A Pages deployment without a working gateway cannot complete searches.
