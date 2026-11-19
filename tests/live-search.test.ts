@@ -65,13 +65,16 @@ describe("live search result adapters", () => {
 				new Response(
 					JSON.stringify({
 						query: {
-							search: [
-								{
+							pages: {
+								123: {
 									pageid: 123,
 									title: "Internet privacy",
-									snippet: "<span>Privacy</span> and data.",
+									extract: "<span>Privacy</span> and data.",
+									thumbnail: {
+										source: "https://upload.wikimedia.org/privacy.jpg",
+									},
 								},
-							],
+							},
 						},
 					}),
 					{
@@ -86,6 +89,7 @@ describe("live search result adapters", () => {
 			url: "https://en.wikipedia.org/wiki/Internet_privacy",
 			domain: "en.wikipedia.org",
 			snippet: "Privacy and data.",
+			image: "https://upload.wikimedia.org/privacy.jpg",
 		});
 	});
 
