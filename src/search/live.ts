@@ -392,6 +392,55 @@ export function rankLiveResults(
 	return { ...payload, results: ranked };
 }
 
+export async function searchWikipedia(
+	query: string,
+	options: {
+		fetchImpl?: typeof fetch;
+		signal?: AbortSignal;
+	} = {},
+): Promise<WebSearchPayload> {
+	const fetchImpl = options.fetchImpl ?? fetch;
+	const endpoint = new URL("https://en.wikipedia.org/w/api.php");
+	endpoint.searchParams.set("action", "query");
+	endpoint.searchParams.set("list", "search");
+	endpoint.searchParams.set("srsearch", query);
+	endpoint.searchParams.set("srlimit", "20");
+	endpoint.searchParams.set("format", "json");
+	endpoint.searchParams.set("origin", "*");
+
+	const response = await fetchImpl(endpoint, {
+		cache: "no-store",
+		credentials: "omit",
+		referrerPolicy: "no-referrer",
+		signal: options.signal,
+	});
+	if (!response.ok) throw new Error("Wikipedia search is unavailable.");
+	const payload = (await response.json()) as {
+		query?: {
+			search?: Array<{
+				pageid: number;
+				title: string;
+				snippet: string;
+			}>;
+		};
+	};
+	const results = (payload.query?.search ?? []).map((hit, index) => ({
+		id: `wikipedia:${hit.pageid}`,
+		title: cleanDisplayText(hit.title),
+		url: `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title.replace(/ /g, "_"))}`,
+		domain: "en.wikipedia.org",
+		snippet: cleanDisplayText(hit.snippet),
+		source: "Wikipedia",
+		position: index + 1,
+		image: "https://en.wikipedia.org/favicon.ico",
+	}));
+	return {
+		query,
+		provider: "Wikipedia",
+		results,
+	};
+}
+
 export function rankRelatedDocuments(
 	selected: DocumentRecord,
 	documents: DocumentRecord[],

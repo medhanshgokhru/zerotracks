@@ -12,11 +12,13 @@ import {
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { documentDomain } from "./search/index";
 import {
+	buildAiSummary,
 	buildExtractiveSummary,
 	isVerifiedOverviewSource,
 	paginateWebSearch,
 	rankLiveResults,
 	rankRelatedDocuments,
+	searchWikipedia,
 	sourceReliabilitySignal,
 } from "./search/live";
 import { cleanDisplayText } from "./search/tokenizer";
@@ -122,6 +124,8 @@ export default function App() {
 	const [theme, setTheme] = useState<Theme>(getStoredTheme);
 	const searchRef = useRef<HTMLInputElement>(null);
 	const addressRef = useRef<HTMLInputElement>(null);
+	const overviewWorkerRef = useRef<Worker | null>(null);
+	const overviewRequestRef = useRef(0);
 
 	useEffect(() => {
 		document.documentElement.dataset.theme = theme;
@@ -138,6 +142,41 @@ export default function App() {
 				.register(`${import.meta.env.BASE_URL}service-worker.js`)
 				.catch(() => undefined);
 		}
+	}, []);
+
+	useEffect(() => {
+		const worker = new Worker(
+			new URL("./search/local-overview.worker.ts", import.meta.url),
+			{ type: "module" },
+		);
+		overviewWorkerRef.current = worker;
+		worker.onmessage = (
+			event: MessageEvent<
+				| { type: "ready"; overview: LocalOverview; requestId: number }
+				| { type: "error"; message: string; requestId?: number }
+			>,
+		) => {
+			if (
+				event.data.type === "error" &&
+				event.data.requestId !== overviewRequestRef.current
+			)
+				return;
+			if (event.data.type === "ready")
+				setOverview({ status: "ready", payload: event.data.overview });
+			else {
+				console.warn("Local overview model unavailable:", event.data.message);
+				setOverview({ status: "unavailable", error: event.data.message });
+			}
+		};
+		worker.onerror = (event) => {
+			console.warn("Local overview worker failed:", event.message);
+			setOverview({ status: "unavailable", error: event.message });
+		};
+		worker.postMessage({ type: "warmup" });
+		return () => {
+			worker.terminate();
+			overviewWorkerRef.current = null;
+		};
 	}, []);
 
 	useEffect(() => {
@@ -191,11 +230,28 @@ export default function App() {
 			)
 			.catch(() => {
 				if (!controller.signal.aborted) {
-					setLiveSearch({
-						query: submittedQuery,
-						status: "error",
-						error: "Live search is unavailable.",
-					});
+					void searchWikipedia(submittedQuery, {
+						signal: controller.signal,
+					})
+						.then((payload) =>
+							setLiveSearch({
+								query: submittedQuery,
+								status: "ready",
+								payload,
+							}),
+						)
+						.catch((fallbackError: unknown) => {
+							if (!controller.signal.aborted) {
+								setLiveSearch({
+									query: submittedQuery,
+									status: "error",
+									error:
+										fallbackError instanceof Error
+											? fallbackError.message
+											: "Live search is unavailable.",
+								});
+							}
+						});
 				}
 			});
 		return () => controller.abort();
@@ -210,40 +266,22 @@ export default function App() {
 			setOverview({ status: "idle" });
 			return;
 		}
-		const controller = new AbortController();
 		setOverview({ status: "loading" });
-		fetch(`${SEARCH_API_BASE}/overview`, {
-			method: "POST",
-			signal: controller.signal,
-			cache: "no-store",
-			credentials: "omit",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({
-				query: submittedQuery,
-				results: livePayload.results,
-			}),
-		})
-			.then(async (response) => {
-				const payload = (await response.json()) as
-					| (LocalOverview & { error?: never })
-					| { error: string };
-				if (!response.ok || "error" in payload)
-					throw new Error(
-						"error" in payload ? payload.error : "Live overview unavailable.",
-					);
-				setOverview({ status: "ready", payload });
-			})
-			.catch((error: unknown) => {
-				if (!controller.signal.aborted)
-					setOverview({
-						status: "unavailable",
-						error:
-							error instanceof Error
-								? error.message
-								: "Live overview unavailable.",
-					});
-			});
-		return () => controller.abort();
+		const requestId = overviewRequestRef.current + 1;
+		overviewRequestRef.current = requestId;
+		const timeout = window.setTimeout(() => {
+			if (overviewRequestRef.current === requestId)
+				setOverview({ status: "unavailable" });
+		}, 180_000);
+		overviewWorkerRef.current?.postMessage({
+			type: "summarize",
+			requestId,
+			query: submittedQuery,
+			results: livePayload.results,
+		});
+		return () => {
+			window.clearTimeout(timeout);
+		};
 	}, [livePayload, submittedQuery]);
 	const liveResults = useMemo(
 		() =>
@@ -275,6 +313,10 @@ export default function App() {
 	}, [records, selected]);
 	const atAGlance = useMemo(
 		() => buildExtractiveSummary(records, submittedQuery, 3),
+		[records, submittedQuery],
+	);
+	const aiSummary = useMemo(
+		() => buildAiSummary(records, submittedQuery, 3),
 		[records, submittedQuery],
 	);
 	const mediaSources = useMemo(
@@ -621,7 +663,9 @@ export default function App() {
 								</select>
 							</div>
 						</div>
-						{(overview.payload || overview.status === "loading") && (
+						{(overview.payload ||
+							aiSummary ||
+							overview.status === "loading") && (
 							<section className="ai-summary" aria-label="AI summary">
 								<div className="ai-summary-head">
 									<span className="ai-summary-mark">✦</span>
@@ -630,14 +674,16 @@ export default function App() {
 											<span className="related-label">
 												AI OVERVIEW ·{" "}
 												{overview.payload?.model
-													? `LIVE MODEL · ${overview.payload.model}`
-													: "LIVE EVIDENCE"}
+													? `LOCAL MODEL · ${overview.payload.model}`
+													: overview.status === "loading"
+														? "LOCAL SYNTHESIS"
+														: "LOCAL EVIDENCE"}
 											</span>
 											<span className="ai-summary-local">
-												<i /> LIVE / REALTIME
+												<i /> PRIVATE / LOCAL
 											</span>
 										</div>
-										<p>{overview.payload?.overview}</p>
+										<p>{overview.payload?.overview ?? aiSummary?.intro}</p>
 									</div>
 								</div>
 								{overviewSources.length > 0 && (
@@ -725,9 +771,6 @@ export default function App() {
 													src={document.image}
 													alt=""
 													referrerPolicy="no-referrer"
-													onError={(event) => {
-														event.currentTarget.style.display = "none";
-													}}
 												/>
 												<span>{String(index + 1).padStart(2, "0")}</span>
 											</span>

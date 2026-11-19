@@ -16,59 +16,6 @@ const MAX_QUERY_LENGTH = 256;
 const MAX_RESULTS = 20;
 const MAX_BODY_LENGTH = 4096;
 
-function buildLiveOverview(query, results) {
-	const terms = [
-		...new Set(
-			query
-				.toLocaleLowerCase("en-US")
-				.match(/[\p{L}\p{N}]+/gu)
-				?.filter((term) => term.length > 1) ?? [],
-		),
-	];
-	const snippets = results
-		.map((result) => {
-			const text = `${result.title}. ${result.snippet}`
-				.replace(/<[^>]*>/g, " ")
-				.replace(/&(?:nbsp|amp|quot|apos|#39);/gi, " ")
-				.replace(/\s+/g, " ")
-				.trim();
-			const sentence =
-				text.match(/^.{35}[^.!?]*[.!?]/)?.[0]?.trim() ||
-				text.split(/(?<=[.!?])\s+/)[0]?.trim() ||
-				text;
-			const score = terms.reduce(
-				(total, term) =>
-					total + (sentence.toLocaleLowerCase("en-US").includes(term) ? 2 : 0),
-				0,
-			);
-			return { sentence, score, position: result.position };
-		})
-		.filter(({ sentence }) => sentence.length >= 35)
-		.sort(
-			(left, right) =>
-				right.score - left.score || left.position - right.position,
-		);
-	const seen = new Set();
-	const selected = [];
-	for (const snippet of snippets) {
-		const key = snippet.sentence
-			.toLocaleLowerCase("en-US")
-			.replace(/[^a-z0-9]+/g, " ")
-			.trim();
-		if (!key || seen.has(key)) continue;
-		seen.add(key);
-		selected.push(snippet.sentence.replace(/[.!?]+$/, "."));
-		if (selected.length === 3) break;
-	}
-	return {
-		overview:
-			selected.join(" ") || `No verified summary is available for ${query}.`,
-		keyPoints: selected.slice(0, 3),
-		sourceIds: results.slice(0, 3).map((result) => result.id),
-		model: "live-result-synthesis",
-	};
-}
-
 function positiveInteger(value, fallback) {
 	const parsed = Number(value);
 	return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -144,6 +91,11 @@ export function createSearchService(options = {}) {
 			sendJson(response, 200, { status: "ok" });
 			return;
 		}
+		if (request.method !== "POST" || requestUrl.pathname !== "/api/search") {
+			sendJson(response, 404, { error: "Not found." });
+			return;
+		}
+
 		let body;
 		try {
 			body = await readJsonBody(request);
@@ -160,17 +112,6 @@ export function createSearchService(options = {}) {
 			sendJson(response, 400, {
 				error: `Enter a query between 1 and ${MAX_QUERY_LENGTH} characters.`,
 			});
-			return;
-		}
-		if (request.method === "POST" && requestUrl.pathname === "/api/overview") {
-			const results = Array.isArray(body.results)
-				? body.results.slice(0, 20)
-				: [];
-			sendJson(response, 200, buildLiveOverview(query, results));
-			return;
-		}
-		if (request.method !== "POST" || requestUrl.pathname !== "/api/search") {
-			sendJson(response, 404, { error: "Not found." });
 			return;
 		}
 		if (Date.now() - rateWindowStart >= 60_000) {

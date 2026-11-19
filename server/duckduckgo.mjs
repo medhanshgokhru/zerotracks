@@ -29,11 +29,8 @@ export function extractOpenGraphImage(html, pageUrl) {
 	const $ = load(html);
 	const candidates = [
 		$('meta[property="og:image"]').first().attr("content"),
-		$('meta[property="og:image:url"]').first().attr("content"),
-		$('meta[property="og:image:secure_url"]').first().attr("content"),
 		$('meta[name="twitter:image"]').first().attr("content"),
 		$('meta[name="twitter:image:src"]').first().attr("content"),
-		$('link[rel="image_src"]').first().attr("href"),
 	];
 	for (const candidate of candidates) {
 		if (!candidate) continue;
@@ -57,7 +54,7 @@ async function fetchPreviewImage(url, fetchImpl) {
 				accept: "text/html",
 				"user-agent": "ZeroTracksSearch/1.0",
 			},
-			signal: AbortSignal.timeout(1800),
+			signal: AbortSignal.timeout(400),
 		});
 		if (!response.ok) {
 			imageCache.set(url, "");
@@ -79,13 +76,12 @@ async function fetchPreviewImage(url, fetchImpl) {
 
 export async function enrichResultImages(results, fetchImpl = fetch) {
 	await Promise.all(
-		results.slice(0, 8).map(async (result) => {
+		results.slice(0, 4).map(async (result) => {
 			const youtubeImage = extractYouTubeThumbnail(result.url);
 			if (youtubeImage) {
 				result.image = youtubeImage;
 				return;
 			}
-			result.image = "";
 			const ogImage = await fetchPreviewImage(result.url, fetchImpl);
 			if (ogImage) result.image = ogImage;
 		}),
@@ -145,6 +141,11 @@ export function parseDuckDuckGoHtml(html, limit = MAX_RESULTS) {
 			.text()
 			.replace(/\s+/g, " ")
 			.trim();
+		const iconSrc = result.find(".result__icon__img").first().attr("src") ?? "";
+		const image = iconSrc
+			? new URL(iconSrc, "https://duckduckgo.com").href
+			: "";
+
 		if (!title || !url || seen.has(url)) return;
 		seen.add(url);
 		results.push({
@@ -155,7 +156,7 @@ export function parseDuckDuckGoHtml(html, limit = MAX_RESULTS) {
 			snippet,
 			source: "DuckDuckGo",
 			position: results.length + 1,
-			image: "",
+			image,
 		});
 	});
 
@@ -220,9 +221,7 @@ export function rankDuckDuckGoResults(results, query, limit = 12) {
 			)
 				score += 55;
 			if (
-				(/^(www\.)?(facebook|instagram|twitter|tiktok|youtube)\./.test(
-					domain,
-				) ||
+				(/^(www\.)?(facebook|instagram|twitter|tiktok|youtube)\./.test(domain) ||
 					/wikipedia\.org$/i.test(domain)) &&
 				!terms.includes(domainBase)
 			)
