@@ -12,13 +12,11 @@ import {
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { documentDomain } from "./search/index";
 import {
-	buildAiSummary,
 	buildExtractiveSummary,
 	isVerifiedOverviewSource,
 	paginateWebSearch,
 	rankLiveResults,
 	rankRelatedDocuments,
-	searchWikipedia,
 	sourceReliabilitySignal,
 } from "./search/live";
 import { cleanDisplayText } from "./search/tokenizer";
@@ -124,8 +122,6 @@ export default function App() {
 	const [theme, setTheme] = useState<Theme>(getStoredTheme);
 	const searchRef = useRef<HTMLInputElement>(null);
 	const addressRef = useRef<HTMLInputElement>(null);
-	const overviewWorkerRef = useRef<Worker | null>(null);
-	const overviewRequestRef = useRef(0);
 
 	useEffect(() => {
 		document.documentElement.dataset.theme = theme;
@@ -142,41 +138,6 @@ export default function App() {
 				.register(`${import.meta.env.BASE_URL}service-worker.js`)
 				.catch(() => undefined);
 		}
-	}, []);
-
-	useEffect(() => {
-		const worker = new Worker(
-			new URL("./search/local-overview.worker.ts", import.meta.url),
-			{ type: "module" },
-		);
-		overviewWorkerRef.current = worker;
-		worker.onmessage = (
-			event: MessageEvent<
-				| { type: "ready"; overview: LocalOverview; requestId: number }
-				| { type: "error"; message: string; requestId?: number }
-			>,
-		) => {
-			if (
-				event.data.type === "error" &&
-				event.data.requestId !== overviewRequestRef.current
-			)
-				return;
-			if (event.data.type === "ready")
-				setOverview({ status: "ready", payload: event.data.overview });
-			else {
-				console.warn("Local overview model unavailable:", event.data.message);
-				setOverview({ status: "unavailable", error: event.data.message });
-			}
-		};
-		worker.onerror = (event) => {
-			console.warn("Local overview worker failed:", event.message);
-			setOverview({ status: "unavailable", error: event.message });
-		};
-		worker.postMessage({ type: "warmup" });
-		return () => {
-			worker.terminate();
-			overviewWorkerRef.current = null;
-		};
 	}, []);
 
 	useEffect(() => {
@@ -230,28 +191,11 @@ export default function App() {
 			)
 			.catch(() => {
 				if (!controller.signal.aborted) {
-					void searchWikipedia(submittedQuery, {
-						signal: controller.signal,
-					})
-						.then((payload) =>
-							setLiveSearch({
-								query: submittedQuery,
-								status: "ready",
-								payload,
-							}),
-						)
-						.catch((fallbackError: unknown) => {
-							if (!controller.signal.aborted) {
-								setLiveSearch({
-									query: submittedQuery,
-									status: "error",
-									error:
-										fallbackError instanceof Error
-											? fallbackError.message
-											: "Live search is unavailable.",
-								});
-							}
-						});
+					setLiveSearch({
+						query: submittedQuery,
+						status: "error",
+						error: "Live search is unavailable.",
+					});
 				}
 			});
 		return () => controller.abort();
@@ -266,77 +210,40 @@ export default function App() {
 			setOverview({ status: "idle" });
 			return;
 		}
+		const controller = new AbortController();
 		setOverview({ status: "loading" });
-		const requestId = overviewRequestRef.current + 1;
-		overviewRequestRef.current = requestId;
-		const timeout = window.setTimeout(() => {
-			if (overviewRequestRef.current === requestId)
-				setOverview({ status: "unavailable" });
-		}, 180_000);
-		const overviewResults = livePayload.results
-			.filter((hit) => {
-				const domain = hit.domain
-					.toLocaleLowerCase("en-US")
-					.replace(/^www\./, "");
-				const title = cleanDisplayText(hit.title).toLocaleLowerCase("en-US");
-				if (
-					domain === "facebook.com" ||
-					domain.endsWith(".facebook.com") ||
-					domain === "instagram.com" ||
-					domain.endsWith(".instagram.com") ||
-					domain === "x.com" ||
-					domain.endsWith(".x.com") ||
-					domain === "tiktok.com" ||
-					domain.endsWith(".tiktok.com") ||
-					domain.includes("youtube.com")
-				)
-					return false;
-				if (
-					/(?:dating|girlfriend|boyfriend|net worth|family|biography|age)\b/i.test(
-						title,
-					)
-				)
-					return false;
-				return hit.snippet.trim().length >= 35;
+		fetch(`${SEARCH_API_BASE}/overview`, {
+			method: "POST",
+			signal: controller.signal,
+			cache: "no-store",
+			credentials: "omit",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				query: submittedQuery,
+				results: livePayload.results,
+			}),
+		})
+			.then(async (response) => {
+				const payload = (await response.json()) as
+					| (LocalOverview & { error?: never })
+					| { error: string };
+				if (!response.ok || "error" in payload)
+					throw new Error(
+						"error" in payload ? payload.error : "Live overview unavailable.",
+					);
+				setOverview({ status: "ready", payload });
 			})
-			.sort((left, right) => {
-				const leftReliability = sourceReliabilitySignal(left.domain);
-				const rightReliability = sourceReliabilitySignal(right.domain);
-				const compactQuery = submittedQuery
-					.toLocaleLowerCase("en-US")
-					.replace(/[^a-z0-9]+/gu, "");
-				const leftDomain = left.domain
-					.toLocaleLowerCase("en-US")
-					.replace(/^www\./, "");
-				const rightDomain = right.domain
-					.toLocaleLowerCase("en-US")
-					.replace(/^www\./, "");
-				const leftOfficial =
-					leftDomain.startsWith(`${compactQuery}.`) ||
-					leftDomain === `${compactQuery}.com` ||
-					leftDomain === `${compactQuery}.org`;
-				const rightOfficial =
-					rightDomain.startsWith(`${compactQuery}.`) ||
-					rightDomain === `${compactQuery}.com` ||
-					rightDomain === `${compactQuery}.org`;
-				return (
-					Number(rightOfficial) - Number(leftOfficial) ||
-					rightReliability - leftReliability ||
-					left.position - right.position
-				);
-			})
-			.slice(0, 6);
-		overviewWorkerRef.current?.postMessage({
-			type: "summarize",
-			requestId,
-			query: submittedQuery,
-			results: overviewResults.length
-				? overviewResults
-				: livePayload.results.slice(0, 6),
-		});
-		return () => {
-			window.clearTimeout(timeout);
-		};
+			.catch((error: unknown) => {
+				if (!controller.signal.aborted)
+					setOverview({
+						status: "unavailable",
+						error:
+							error instanceof Error
+								? error.message
+								: "Live overview unavailable.",
+					});
+			});
+		return () => controller.abort();
 	}, [livePayload, submittedQuery]);
 	const liveResults = useMemo(
 		() =>
@@ -368,10 +275,6 @@ export default function App() {
 	}, [records, selected]);
 	const atAGlance = useMemo(
 		() => buildExtractiveSummary(records, submittedQuery, 3),
-		[records, submittedQuery],
-	);
-	const aiSummary = useMemo(
-		() => buildAiSummary(records, submittedQuery, 3),
 		[records, submittedQuery],
 	);
 	const mediaSources = useMemo(
@@ -718,9 +621,7 @@ export default function App() {
 								</select>
 							</div>
 						</div>
-						{(overview.payload ||
-							aiSummary ||
-							overview.status === "loading") && (
+						{(overview.payload || overview.status === "loading") && (
 							<section className="ai-summary" aria-label="AI summary">
 								<div className="ai-summary-head">
 									<span className="ai-summary-mark">✦</span>
@@ -729,16 +630,14 @@ export default function App() {
 											<span className="related-label">
 												AI OVERVIEW ·{" "}
 												{overview.payload?.model
-													? `LOCAL MODEL · ${overview.payload.model}`
-													: overview.status === "loading"
-														? "LOCAL SYNTHESIS"
-														: "LOCAL EVIDENCE"}
+													? `LIVE MODEL · ${overview.payload.model}`
+													: "LIVE EVIDENCE"}
 											</span>
 											<span className="ai-summary-local">
-												<i /> PRIVATE / LOCAL
+												<i /> LIVE / REALTIME
 											</span>
 										</div>
-										<p>{overview.payload?.overview ?? aiSummary?.intro}</p>
+										<p>{overview.payload?.overview}</p>
 									</div>
 								</div>
 								{overviewSources.length > 0 && (

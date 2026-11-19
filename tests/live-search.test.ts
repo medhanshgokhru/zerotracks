@@ -9,7 +9,6 @@ import {
 	paginateWebSearch,
 	rankLiveResults,
 	rankRelatedDocuments,
-	searchWikipedia,
 	sourceReliabilitySignal,
 } from "../src/search/live";
 import { cleanDisplayText } from "../src/search/tokenizer";
@@ -57,48 +56,6 @@ describe("live search result adapters", () => {
 		expect(cleanDisplayText("&quot;Hi&quot; &amp; HI&#039;")).toBe(
 			'"Hi" & HI\'',
 		);
-	});
-
-	it("provides a CORS-enabled Wikipedia fallback without a gateway", async () => {
-		const payload = await searchWikipedia("privacy", {
-			fetchImpl: async () =>
-				new Response(
-					JSON.stringify({
-						query: {
-							search: [
-								{
-									pageid: 123,
-									title: "Internet privacy",
-									snippet: "<span>Privacy</span> and data.",
-								},
-							],
-							pages: {
-								123: {
-									pageid: 123,
-									title: "Internet privacy",
-									extract:
-										"Privacy is the ability to control personal information.",
-									thumbnail: {
-										source: "https://upload.wikimedia.org/example.jpg",
-									},
-								},
-							},
-						},
-					}),
-					{
-						status: 200,
-						headers: { "content-type": "application/json" },
-					},
-				),
-		});
-		expect(payload.provider).toBe("Wikipedia");
-		expect(payload.results[0]).toMatchObject({
-			title: "Internet privacy",
-			url: "https://en.wikipedia.org/wiki/Internet_privacy",
-			domain: "en.wikipedia.org",
-			snippet: "Privacy and data.",
-			image: "https://upload.wikimedia.org/example.jpg",
-		});
 	});
 
 	it("creates an API-free extractive summary from result metadata", () => {

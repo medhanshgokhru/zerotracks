@@ -133,6 +133,44 @@ describe("DuckDuckGo result parsing", () => {
 		expect(results[0].id).toBe("amazon");
 	});
 
+	it("builds a live overview for arbitrary queries", async () => {
+		const server = createSearchService({
+			search: async () => [],
+		});
+		servers.add(server);
+		await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+		const address = server.address();
+		if (!address || typeof address === "string")
+			throw new Error("No test server address.");
+		const response = await fetch(
+			`http://127.0.0.1:${address.port}/api/overview`,
+			{
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					query: "quantum computing",
+					results: [
+						{
+							id: "one",
+							title: "Quantum computing overview",
+							domain: "example.org",
+							snippet:
+								"Quantum computing uses quantum mechanics to process information.",
+							url: "https://example.org/quantum",
+							source: "DuckDuckGo",
+							position: 1,
+						},
+					],
+				}),
+			},
+		);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			model: "live-result-synthesis",
+			sourceIds: ["one"],
+		});
+	});
+
 	it("returns stateless, no-store results and rejects invalid or disallowed requests", async () => {
 		const server = createSearchService({
 			allowedOrigins: ["https://search.example"],
