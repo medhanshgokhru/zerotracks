@@ -96,19 +96,6 @@ function parseOverview(text: string, results: WebSearchHit[], model: string) {
 
 function assertUsableOverview(overview: string) {
 	const lower = overview.toLowerCase();
-	if (
-		/^here(?:'s| is)\b/.test(lower) ||
-		/^this (?:summary|overview)\b/.test(lower) ||
-		lower.includes("as an ai") ||
-		lower.includes("i cannot")
-	)
-		throw new Error("The local model returned a preamble instead of evidence.");
-	const sentenceCount = overview
-		.split(/[.!?]+(?:\s|$)/)
-		.map((sentence) => sentence.trim())
-		.filter(Boolean).length;
-	if (sentenceCount < 2 || sentenceCount > 3)
-		throw new Error("The local model returned an invalid overview length.");
 	const words = overview.toLowerCase().match(/[a-z][a-z'-]*/g) ?? [];
 	const uniqueWords = new Set(words);
 	if (
