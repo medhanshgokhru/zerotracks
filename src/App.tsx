@@ -273,11 +273,66 @@ export default function App() {
 			if (overviewRequestRef.current === requestId)
 				setOverview({ status: "unavailable" });
 		}, 180_000);
+		const overviewResults = livePayload.results
+			.filter((hit) => {
+				const domain = hit.domain
+					.toLocaleLowerCase("en-US")
+					.replace(/^www\./, "");
+				const title = cleanDisplayText(hit.title).toLocaleLowerCase("en-US");
+				if (
+					domain === "facebook.com" ||
+					domain.endsWith(".facebook.com") ||
+					domain === "instagram.com" ||
+					domain.endsWith(".instagram.com") ||
+					domain === "x.com" ||
+					domain.endsWith(".x.com") ||
+					domain === "tiktok.com" ||
+					domain.endsWith(".tiktok.com") ||
+					domain.includes("youtube.com")
+				)
+					return false;
+				if (
+					/(?:dating|girlfriend|boyfriend|net worth|family|biography|age)\b/i.test(
+						title,
+					)
+				)
+					return false;
+				return hit.snippet.trim().length >= 35;
+			})
+			.sort((left, right) => {
+				const leftReliability = sourceReliabilitySignal(left.domain);
+				const rightReliability = sourceReliabilitySignal(right.domain);
+				const compactQuery = submittedQuery
+					.toLocaleLowerCase("en-US")
+					.replace(/[^a-z0-9]+/gu, "");
+				const leftDomain = left.domain
+					.toLocaleLowerCase("en-US")
+					.replace(/^www\./, "");
+				const rightDomain = right.domain
+					.toLocaleLowerCase("en-US")
+					.replace(/^www\./, "");
+				const leftOfficial =
+					leftDomain.startsWith(`${compactQuery}.`) ||
+					leftDomain === `${compactQuery}.com` ||
+					leftDomain === `${compactQuery}.org`;
+				const rightOfficial =
+					rightDomain.startsWith(`${compactQuery}.`) ||
+					rightDomain === `${compactQuery}.com` ||
+					rightDomain === `${compactQuery}.org`;
+				return (
+					Number(rightOfficial) - Number(leftOfficial) ||
+					rightReliability - leftReliability ||
+					left.position - right.position
+				);
+			})
+			.slice(0, 6);
 		overviewWorkerRef.current?.postMessage({
 			type: "summarize",
 			requestId,
 			query: submittedQuery,
-			results: livePayload.results,
+			results: overviewResults.length
+				? overviewResults
+				: livePayload.results.slice(0, 6),
 		});
 		return () => {
 			window.clearTimeout(timeout);
@@ -771,6 +826,9 @@ export default function App() {
 													src={document.image}
 													alt=""
 													referrerPolicy="no-referrer"
+													onError={(event) => {
+														event.currentTarget.style.display = "none";
+													}}
 												/>
 												<span>{String(index + 1).padStart(2, "0")}</span>
 											</span>

@@ -402,9 +402,15 @@ export async function searchWikipedia(
 	const fetchImpl = options.fetchImpl ?? fetch;
 	const endpoint = new URL("https://en.wikipedia.org/w/api.php");
 	endpoint.searchParams.set("action", "query");
-	endpoint.searchParams.set("list", "search");
-	endpoint.searchParams.set("srsearch", query);
-	endpoint.searchParams.set("srlimit", "20");
+	endpoint.searchParams.set("generator", "search");
+	endpoint.searchParams.set("gsrsearch", query);
+	endpoint.searchParams.set("gsrlimit", "20");
+	endpoint.searchParams.set("prop", "pageimages");
+	endpoint.searchParams.set("pilimit", "20");
+	endpoint.searchParams.set("pithumbsize", "480");
+	endpoint.searchParams.set("exintro", "1");
+	endpoint.searchParams.set("explaintext", "1");
+	endpoint.searchParams.set("exsentences", "2");
 	endpoint.searchParams.set("format", "json");
 	endpoint.searchParams.set("origin", "*");
 
@@ -422,9 +428,30 @@ export async function searchWikipedia(
 				title: string;
 				snippet: string;
 			}>;
+			pages?: Record<
+				string,
+				{
+					pageid: number;
+					title: string;
+					extract?: string;
+					thumbnail?: { source?: string };
+				}
+			>;
 		};
 	};
-	const results = (payload.query?.search ?? []).map((hit, index) => ({
+	const pages = payload.query?.pages;
+	const hits =
+		payload.query?.search ??
+		(pages
+			? Object.values(pages)
+					.sort((left, right) => left.pageid - right.pageid)
+					.map((page) => ({
+						pageid: page.pageid,
+						title: page.title,
+						snippet: page.extract ?? "",
+					}))
+			: []);
+	const results = hits.map((hit, index) => ({
 		id: `wikipedia:${hit.pageid}`,
 		title: cleanDisplayText(hit.title),
 		url: `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title.replace(/ /g, "_"))}`,
@@ -432,7 +459,7 @@ export async function searchWikipedia(
 		snippet: cleanDisplayText(hit.snippet),
 		source: "Wikipedia",
 		position: index + 1,
-		image: "https://en.wikipedia.org/favicon.ico",
+		image: pages?.[String(hit.pageid)]?.thumbnail?.source ?? "",
 	}));
 	return {
 		query,

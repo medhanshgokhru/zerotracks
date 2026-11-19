@@ -72,6 +72,17 @@ describe("live search result adapters", () => {
 									snippet: "<span>Privacy</span> and data.",
 								},
 							],
+							pages: {
+								123: {
+									pageid: 123,
+									title: "Internet privacy",
+									extract:
+										"Privacy is the ability to control personal information.",
+									thumbnail: {
+										source: "https://upload.wikimedia.org/example.jpg",
+									},
+								},
+							},
 						},
 					}),
 					{
@@ -86,6 +97,7 @@ describe("live search result adapters", () => {
 			url: "https://en.wikipedia.org/wiki/Internet_privacy",
 			domain: "en.wikipedia.org",
 			snippet: "Privacy and data.",
+			image: "https://upload.wikimedia.org/example.jpg",
 		});
 	});
 

@@ -64,7 +64,7 @@ describe("DuckDuckGo result parsing", () => {
 			url: "https://example.org/one",
 			domain: "example.org",
 			snippet: "A useful search result.",
-			image: "https://external-content.duckduckgo.com/ip3/example.org.ico",
+			image: "",
 		});
 	});
 
